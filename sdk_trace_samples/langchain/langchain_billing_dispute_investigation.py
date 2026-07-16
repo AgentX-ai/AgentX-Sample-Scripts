@@ -98,18 +98,17 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 # model for the grounded policy reasoning. Using two model tiers is what makes
 # the per-trace cost/latency comparison in the AgentX session interesting.
 FAST_MODEL = "gpt-4o-mini"
-STRONG_MODEL = "gpt-4o"
+STRONG_MODEL = "gpt-5.5"
 
 # One session id ties every trace below together in the AgentX UI.
 SESSION_ID = f"billing-dispute-{int(time.time())}"
 
 # The exact demo prompt: it can't be answered from knowledge alone, and it
 # can't be answered from account tools alone — it needs both, plus reasoning.
-USER_MESSAGE = "I was charged $499 for an annual renewal yesterday. I tried to cancel the day before, but the page wasn't working. Please refund the charge, and ensure I won't be billed again."
+USER_MESSAGE = """I was charged $499 for an annual plan renewal yesterday,
+I tried to cancel one day before the renewal, but the page wasn't working.
+Please refund and ensure I won't be billed again!"""
 
-# ---------------------------------------------------------------------------
-# CONFIG — hidden facts. Flip these to reproduce the eval scenarios.
-# ---------------------------------------------------------------------------
 CUSTOMER_ID = "cust_10042"
 SUBSCRIPTION_ID = "sub_annual_5567"
 INVOICE_ID = "inv_2025_11_15_0001"
@@ -126,8 +125,6 @@ PRIOR_REFUND_COUNT = 0  # clean refund history
 CHARGEBACKS = 0
 REFUND_AUTHORITY_LIMIT = 1000.00  # agent can auto-refund up to this
 REFUND_FAILS_FIRST_ATTEMPT = True  # simulate a gateway timeout + retry
-
-SUPPORT_MESSAGE = "I'm trying to cancel but the button is not working."
 
 
 # ===========================================================================
@@ -361,7 +358,7 @@ def get_support_history(customer_id: str) -> dict:
             {
                 "date": CANCEL_ATTEMPT_DATE.isoformat(),
                 "channel": "live_chat",
-                "message": SUPPORT_MESSAGE,
+                "message": "I'm trying to cancel but the button is not working.",
                 "resolved": False,
             }
         ],
@@ -551,10 +548,11 @@ def investigate() -> str:
             RetrievalPlan,
             handler=handler,
         )
-        query_text = (
-            " ; ".join(plan.queries)
-            or "annual subscription refund and cancellation policy"
-        )
+        # query_text = (
+        #     " ; ".join(plan.queries)
+        #     or "annual subscription refund and cancellation policy"
+        # )
+        query_text = " ; ".join(plan.queries)
         print(f"[2] retrieval queries={plan.queries}")
 
         # ---- 3. Account & billing investigation (agent + 6 read tools) ----
@@ -581,7 +579,7 @@ def investigate() -> str:
             "renewal_date": RENEWAL_DATE.isoformat(),
             "cancellation_attempt_date": CANCEL_ATTEMPT_DATE.isoformat(),
             "cancellation_completed": False,
-            "support_evidence": SUPPORT_MESSAGE,
+            "support_evidence": "I'm trying to cancel but the button is not working.",
             "usage_after_renewal": USAGE_SESSIONS_AFTER_RENEWAL,
             "account_type": "individual",
             "invoice_refundable": True,
