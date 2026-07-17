@@ -511,7 +511,7 @@ def investigate(user_message: str) -> str:
             handler=handler,
         )
         print(
-            f"[1] intents={intent.intents} financially_sensitive={intent.financially_sensitive} "
+            f"  1️⃣ intents={intent.intents} financially_sensitive={intent.financially_sensitive} "
             f"risk={intent.risk_score:.2f}"
         )
 
@@ -527,7 +527,7 @@ def investigate(user_message: str) -> str:
             handler=handler,
         )
         query_text = " ; ".join(plan.queries)
-        print(f"[2] retrieval queries={plan.queries}")
+        print(f"  2️⃣ retrieval queries={plan.queries}")
 
         # ---- 3. Account & billing investigation (agent + 6 read tools) ----
         # A real create_agent run: the agent calls the account/billing tools and
@@ -545,7 +545,7 @@ def investigate(user_message: str) -> str:
             f"Investigate customer {CUSTOMER_ID}, subscription {SUBSCRIPTION_ID}, invoice "
             f"{INVOICE_ID}. Product-usage date range: {RENEWAL_DATE.isoformat()}..{date.today().isoformat()}.",
         )
-        print(f"[3] investigation summary: {investigation_summary[:160]}...")
+        print(f"  3️⃣ investigation summary: {investigation_summary[:160]}...")
 
         # Facts used for downstream reasoning come from the (deterministic) mock
         # backend so the demo narrative is reproducible run to run.
@@ -646,11 +646,11 @@ def investigate(user_message: str) -> str:
             )
             risk: RiskAssessment = fut_risk.result()
         print(
-            f"[4] policy: initial={initial_versions} outdated={outdated} corrected={effective_versions} "
+            f"  4️⃣ policy: initial={initial_versions} outdated={outdated} corrected={effective_versions} "
             f"-> eligible={eligibility.refund_eligible} clause='{eligibility.policy_clause}' max=${eligibility.maximum_refund}"
         )
         print(
-            f"[5] risk: level={risk.risk_level} action={risk.recommended_action} signals={risk.signals}"
+            f"  5️⃣ risk: level={risk.risk_level} action={risk.recommended_action} signals={risk.signals}"
         )
 
         # ---- 6. Decision orchestration + action validation ---------------
@@ -691,7 +691,7 @@ def investigate(user_message: str) -> str:
             handler=handler,
         )
         print(
-            f"[6] validation: approved={validation.approved} issues={validation.issues}"
+            f"  6️⃣ validation: approved={validation.approved} issues={validation.issues}"
         )
 
         # ---- 7. Action execution (agent + action tools) ------------------
@@ -728,7 +728,7 @@ def investigate(user_message: str) -> str:
                 f"auto-renew.",
             )
             decision_label = "refund issued"
-        print(f"[7] execution: {outcome[:160]}...")
+        print(f"  7️⃣ execution: {outcome[:160]}...")
 
         # ---- 8. Customer-facing response ----------------------------------
         response = run_text(
