@@ -75,6 +75,7 @@ from langchain.agents import create_agent
 
 load_dotenv()
 
+# ------ AgentX handler setup ------
 client = AgentX(
     api_key=os.getenv("AGENTX_API_KEY"),
     base_url=os.getenv("BASE_URL"),
@@ -86,38 +87,25 @@ handler = AgentXCallbackHandler(
     name="support-agent-billing",  # custom name for the agent
     session_id="session-001",  # custom session id for the agent
 )
-# name/session_id above are only used for calls made outside an active
-# `with tracer.trace(...)` span. investigate() below wraps every call in
-# one orchestrator span, so its own name/session_id govern instead — every
-# chain/agent/retriever invocation merges into that single trace rather than
-# sending its own.
+# ------ AgentX handler setup ------
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# A cheap/fast model for classification, rewriting and drafting; a stronger
-# model for the grounded policy reasoning. Using two model tiers is what makes
-# the per-trace cost/latency comparison in the AgentX session interesting.
 FAST_MODEL = "gpt-4o-mini"
 STRONG_MODEL = "gpt-5.5"
 
-# One session id ties every trace below together in the AgentX UI.
-SESSION_ID = f"billing-dispute-{int(time.time())}"
 
-# The exact demo prompt: it can't be answered from knowledge alone, and it
-# can't be answered from account tools alone — it needs both, plus reasoning.
 USER_MESSAGE = """I was charged $499 for an annual plan renewal yesterday,
 I tried to cancel one day before the renewal, but the page wasn't working.
 Please refund and ensure I won't be billed again!"""
 
+
+# ------- mock data -------
+SESSION_ID = f"billing-dispute-{int(time.time())}"
 CUSTOMER_ID = "cust_10042"
 SUBSCRIPTION_ID = "sub_annual_5567"
 INVOICE_ID = "inv_2025_11_15_0001"
 CHARGE_AMOUNT = 499.00
-
-# The company tightened its refund window from 14 days to 7 days on this date.
 POLICY_CHANGE_DATE = date(2026, 1, 1)
-# The renewal happened while the OLD (14-day) policy was still in effect, so the
-# agent must not apply the current 7-day policy — this drives the correction.
 RENEWAL_DATE = date(2025, 11, 15)
 CANCEL_ATTEMPT_DATE = date(2025, 11, 14)  # one day before renewal
 USAGE_SESSIONS_AFTER_RENEWAL = 0  # no product usage after renewal
@@ -125,6 +113,7 @@ PRIOR_REFUND_COUNT = 0  # clean refund history
 CHARGEBACKS = 0
 REFUND_AUTHORITY_LIMIT = 1000.00  # agent can auto-refund up to this
 REFUND_FAILS_FIRST_ATTEMPT = True  # simulate a gateway timeout + retry
+# ------- mock data -------
 
 
 # ===========================================================================
@@ -170,94 +159,89 @@ class ActionValidation(BaseModel):
 # ===========================================================================
 # Versioned policy knowledge base -> a real, date-filterable vector store.
 # ===========================================================================
-_FAR_FUTURE = date(9999, 12, 31).toordinal()
-
-POLICY_DOCS: List[Dict[str, Any]] = [
-    {
-        "id": "refund-policy-v3",
-        "version": "v3-current",
-        "effective_from": date(2026, 1, 1),
-        "effective_to": None,
-        "topic": "annual subscription refund window",
-        "text": "Refunds for annual subscriptions are permitted within 7 days of the renewal charge.",
-    },
-    {
-        "id": "refund-policy-v2",
-        "version": "v2",
-        "effective_from": date(2025, 6, 1),
-        "effective_to": date(2025, 12, 31),
-        "topic": "annual subscription refund window",
-        "text": "Refunds for annual subscriptions are permitted within 14 days of the renewal charge.",
-    },
-    {
-        "id": "failed-cancellation-exception",
-        "version": "v1",
-        "effective_from": date(2025, 1, 1),
-        "effective_to": None,
-        "topic": "failed cancellation exception",
-        "text": (
-            "If a customer made a documented attempt to cancel before renewal but the "
-            "cancellation did not complete due to a product error, a full refund is "
-            "permitted regardless of the standard refund window."
-        ),
-    },
-    {
-        "id": "enterprise-nonrefundable",
-        "version": "v1",
-        "effective_from": date(2024, 1, 1),
-        "effective_to": None,
-        "topic": "enterprise annual non-refundable",
-        "text": "Enterprise annual subscriptions are non-refundable except where required by law.",
-    },
-    {
-        "id": "grace-period",
-        "version": "v1",
-        "effective_from": date(2024, 1, 1),
-        "effective_to": None,
-        "topic": "cancellation grace period",
-        "text": "A 3-day grace period applies to cancellations submitted immediately before a renewal.",
-    },
-    {
-        "id": "escalation-policy",
-        "version": "v1",
-        "effective_from": date(2024, 1, 1),
-        "effective_to": None,
-        "topic": "refund approval limits and escalation",
-        "text": (
-            "Refunds above the agent authorization limit of $1000, or cases with elevated "
-            "fraud risk, must be escalated to a human specialist."
-        ),
-    },
-]
-
-_policy_documents = [
-    Document(
-        page_content=f"{d['topic']}: {d['text']}",
-        metadata={
-            "id": d["id"],
-            "version": d["version"],
-            "topic": d["topic"],
-            "effective_from": d["effective_from"].toordinal(),
-            "effective_to": (
-                d["effective_to"].toordinal() if d["effective_to"] else _FAR_FUTURE
-            ),
-        },
-    )
-    for d in POLICY_DOCS
-]
-
-_embeddings = OpenAIEmbeddings(api_key=OPENAI_API_KEY)
-_policy_store = InMemoryVectorStore.from_documents(
-    _policy_documents, embedding=_embeddings
-)
-
-
 def policy_retriever_as_of(as_of: date, k: int = 3):
     """Retriever that only returns policies in effect on ``as_of`` — this is
     what lets the agent select the policy version active on the transaction
     date instead of the current one."""
+    POLICY_DOCS: List[Dict[str, Any]] = [
+        {
+            "id": "refund-policy-v3",
+            "version": "v3-current",
+            "effective_from": date(2026, 1, 1),
+            "effective_to": None,
+            "topic": "annual subscription refund window",
+            "text": "Refunds for annual subscriptions are permitted within 7 days of the renewal charge.",
+        },
+        {
+            "id": "refund-policy-v2",
+            "version": "v2",
+            "effective_from": date(2025, 6, 1),
+            "effective_to": date(2025, 12, 31),
+            "topic": "annual subscription refund window",
+            "text": "Refunds for annual subscriptions are permitted within 14 days of the renewal charge.",
+        },
+        {
+            "id": "failed-cancellation-exception",
+            "version": "v1",
+            "effective_from": date(2025, 1, 1),
+            "effective_to": None,
+            "topic": "failed cancellation exception",
+            "text": (
+                "If a customer made a documented attempt to cancel before renewal but the "
+                "cancellation did not complete due to a product error, a full refund is "
+                "permitted regardless of the standard refund window."
+            ),
+        },
+        {
+            "id": "enterprise-nonrefundable",
+            "version": "v1",
+            "effective_from": date(2024, 1, 1),
+            "effective_to": None,
+            "topic": "enterprise annual non-refundable",
+            "text": "Enterprise annual subscriptions are non-refundable except where required by law.",
+        },
+        {
+            "id": "grace-period",
+            "version": "v1",
+            "effective_from": date(2024, 1, 1),
+            "effective_to": None,
+            "topic": "cancellation grace period",
+            "text": "A 3-day grace period applies to cancellations submitted immediately before a renewal.",
+        },
+        {
+            "id": "escalation-policy",
+            "version": "v1",
+            "effective_from": date(2024, 1, 1),
+            "effective_to": None,
+            "topic": "refund approval limits and escalation",
+            "text": (
+                "Refunds above the agent authorization limit of $1000, or cases with elevated "
+                "fraud risk, must be escalated to a human specialist."
+            ),
+        },
+    ]
+    policy_documents = [
+        Document(
+            page_content=f"{d['topic']}: {d['text']}",
+            metadata={
+                "id": d["id"],
+                "version": d["version"],
+                "topic": d["topic"],
+                "effective_from": d["effective_from"].toordinal(),
+                "effective_to": (
+                    d["effective_to"].toordinal()
+                    if d["effective_to"]
+                    else date(9999, 12, 31).toordinal()
+                ),
+            },
+        )
+        for d in POLICY_DOCS
+    ]
+    policy_store = InMemoryVectorStore.from_documents(
+        policy_documents, embedding=OpenAIEmbeddings()
+    )
     as_of_ord = as_of.toordinal()
-    return _policy_store.as_retriever(
+    return policy_store.as_retriever(
         search_kwargs={
             "k": k,
             "filter": lambda doc: doc.metadata["effective_from"]
@@ -267,6 +251,7 @@ def policy_retriever_as_of(as_of: date, k: int = 3):
     )
 
 
+# Format documents for Agent context
 def fmt_docs(docs: List[Document]) -> str:
     return "\n".join(f"- [{d.metadata.get('version')}] {d.page_content}" for d in docs)
 
@@ -474,9 +459,7 @@ ACTION_TOOLS = [
 # LLM helpers — every call is its own trace (own model, tokens, latency).
 # ===========================================================================
 def run_structured(name, model, system, payload, schema, handler=None):
-    llm = ChatOpenAI(
-        model=model, temperature=0, api_key=OPENAI_API_KEY
-    ).with_structured_output(schema)
+    llm = ChatOpenAI(model=model, temperature=0).with_structured_output(schema)
     prompt = ChatPromptTemplate.from_messages(
         [("system", system), ("human", "{payload}")]
     )
@@ -485,7 +468,7 @@ def run_structured(name, model, system, payload, schema, handler=None):
 
 
 def run_text(name, model, system, payload, handler=None):
-    llm = ChatOpenAI(model=model, temperature=0, api_key=OPENAI_API_KEY)
+    llm = ChatOpenAI(model=model, temperature=0)
     prompt = ChatPromptTemplate.from_messages(
         [("system", system), ("human", "{payload}")]
     )
@@ -496,7 +479,7 @@ def run_text(name, model, system, payload, handler=None):
 def run_agent(name, model, tools, system_prompt, user_content):
     """Create a create_agent agent, run it with the handler, return final text."""
     agent = create_agent(
-        ChatOpenAI(model=model, temperature=0, api_key=OPENAI_API_KEY),
+        ChatOpenAI(model=model, temperature=0),
         tools=tools,
         system_prompt=system_prompt,
     )
@@ -508,7 +491,7 @@ def run_agent(name, model, tools, system_prompt, user_content):
 
 
 # ===========================================================================
-# Orchestration — the whole investigation runs inside one orchestrator span.
+# Main Agent Orchestration — the whole investigation runs inside one orchestrator span.
 # ===========================================================================
 def investigate() -> str:
     with client.tracer.trace(
@@ -548,10 +531,6 @@ def investigate() -> str:
             RetrievalPlan,
             handler=handler,
         )
-        # query_text = (
-        #     " ; ".join(plan.queries)
-        #     or "annual subscription refund and cancellation policy"
-        # )
         query_text = " ; ".join(plan.queries)
         print(f"[2] retrieval queries={plan.queries}")
 
