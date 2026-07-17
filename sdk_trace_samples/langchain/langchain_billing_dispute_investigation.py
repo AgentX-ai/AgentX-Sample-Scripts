@@ -94,11 +94,6 @@ FAST_MODEL = "gpt-4o-mini"
 STRONG_MODEL = "gpt-5.5"
 
 
-USER_MESSAGE = """I was charged $499 for an annual plan renewal yesterday,
-I tried to cancel one day before the renewal, but the page wasn't working.
-Please refund and ensure I won't be billed again!"""
-
-
 # ------- mock data -------
 SESSION_ID = f"billing-dispute-{int(time.time())}"
 CUSTOMER_ID = "cust_10042"
@@ -493,14 +488,14 @@ def run_agent(name, model, tools, system_prompt, user_content):
 # ===========================================================================
 # Main Agent Orchestration — the whole investigation runs inside one orchestrator span.
 # ===========================================================================
-def investigate() -> str:
+def investigate(user_message: str) -> str:
     with client.tracer.trace(
         "billing-dispute-orchestrator",
         session_id=SESSION_ID,
         framework="langchain",
         metadata={"use_case": "billing_dispute_refund", "customer_id": CUSTOMER_ID},
     ) as orch:
-        orch.input = USER_MESSAGE
+        orch.input = user_message
 
         # ---- 1. Intent & risk classification ------------------------------
         intent = run_structured(
@@ -511,7 +506,7 @@ def investigate() -> str:
             "disputed amount, the subscription type, and whether the customer claims a "
             "cancellation attempt. Financially sensitive requests must never be "
             "auto-executed without downstream checks.",
-            USER_MESSAGE,
+            user_message,
             IntentClassification,
             handler=handler,
         )
@@ -527,7 +522,7 @@ def investigate() -> str:
             "You generate precise internal knowledge-base search queries for a support "
             "agent handling a billing dispute. Cover refund policy, cancellation rules, "
             "grace periods, failed-cancellation exceptions, and escalation limits.",
-            f"Customer message: {USER_MESSAGE}\nDetected intents: {intent.intents}",
+            f"Customer message: {user_message}\nDetected intents: {intent.intents}",
             RetrievalPlan,
             handler=handler,
         )
@@ -743,7 +738,7 @@ def investigate() -> str:
             "concise, and factual. Explain what you found and what you did. Reference the "
             "relevant policy in plain language but do NOT expose internal reasoning, "
             "confidence scores, or system details.",
-            f"Customer message: {USER_MESSAGE}\n"
+            f"Customer message: {user_message}\n"
             f"Decision: {decision_label}\n"
             f"Refund amount: ${refund_amount}\n"
             f"Policy clause: {eligibility.policy_clause}\n"
@@ -756,7 +751,14 @@ def investigate() -> str:
 
 
 if __name__ == "__main__":
-    final = investigate()
-    print("\n=== Customer-facing response ===")
+
+    USER_MESSAGE = "I was charged $499 for an annual plan renewal yesterday, \
+    I tried to cancel one day before the renewal, but the page wasn't working. \
+    Please refund and ensure I won't be billed again!"
+
+    final = investigate(user_message=USER_MESSAGE)
+
+    print("\n=== AI Agent final response ===")
     print(final)
+
     client.tracer.flush(timeout=15)
