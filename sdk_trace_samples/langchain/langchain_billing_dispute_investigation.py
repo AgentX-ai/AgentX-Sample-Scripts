@@ -2,7 +2,7 @@ import os
 import time
 from datetime import date
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
@@ -415,7 +415,7 @@ def run_text(name, model, system, payload, handler=None):
     return chain.invoke({"payload": payload}, config={"callbacks": [handler]})
 
 
-def run_agent(name, model, tools, system_prompt, user_content):
+def run_agent(name, model, tools, system_prompt, user_content, handler):
     """Create a create_agent agent, run it with the handler, return final text."""
     agent = create_agent(
         ChatOpenAI(model=model, temperature=0),
@@ -432,12 +432,26 @@ def run_agent(name, model, tools, system_prompt, user_content):
 # ===========================================================================
 # Main Agent Orchestration — the whole investigation runs inside one orchestrator span.
 # ===========================================================================
-def investigate(user_message: str) -> str:
+def investigate(
+    user_message: str,
+    client: AgentX,
+    handler: AgentXCallbackHandler,
+    sync: bool = False,
+) -> Tuple[str, Optional[str]]:
+    """Run the investigation. Returns (response, trace_id).
+
+    trace_id is only populated when sync=True. The default (fire-and-forget) mode queues the
+    orchestrator trace on a background thread and never learns its id back in this call. Pass
+    sync=True (e.g. from an evaluation subject function) to get the id back so the trace can be
+    linked to an eval result: https://docs.agentx.so/sdk/tracing#linking-a-trace-to-an-evaluation-result
+    """
+
     with client.tracer.trace(
         "billing-dispute-orchestrator",
         session_id=SESSION_ID,
         framework="langchain",
         metadata={"use_case": "billing_dispute_refund", "customer_id": CUSTOMER_ID},
+        sync=sync,
     ) as orch:
         orch.input = user_message
 
@@ -488,6 +502,7 @@ def investigate(user_message: str) -> str:
             "support evidence, product usage after renewal, and the account type.",
             f"Investigate customer {CUSTOMER_ID}, subscription {SUBSCRIPTION_ID}, invoice "
             f"{INVOICE_ID}. Product-usage date range: {RENEWAL_DATE.isoformat()}..{date.today().isoformat()}.",
+            handler=handler,
         )
         print(f"  3️⃣ investigation summary: {investigation_summary[:160]}...")
 
@@ -650,6 +665,7 @@ def investigate(user_message: str) -> str:
                 f"Escalate customer {CUSTOMER_ID}: eligible={eligibility.refund_eligible}, "
                 f"risk={risk.risk_level}, over_authority={eligibility.maximum_refund > REFUND_AUTHORITY_LIMIT}, "
                 f"validation_approved={validation.approved}.",
+                handler=handler,
             )
             decision_label = "escalated to a human specialist"
         else:
@@ -670,6 +686,7 @@ def investigate(user_message: str) -> str:
                 f"invoice {INVOICE_ID} for ${refund_amount} with reason_code "
                 f"FAILED_CANCEL_ATTEMPT, cancel subscription {SUBSCRIPTION_ID}, and disable "
                 f"auto-renew.",
+                handler=handler,
             )
             decision_label = "refund issued"
         print(f"  7️⃣ execution: {outcome[:160]}...")
@@ -691,7 +708,10 @@ def investigate(user_message: str) -> str:
             handler=handler,
         )
         orch.output = response
-        return response
+
+    # Outside the `with` block: __exit__ has already run by this point, so orch.trace_id is
+    # populated now if sync=True was passed (it would still be None here otherwise).
+    return response, orch.trace_id
 
 
 if __name__ == "__main__":
@@ -700,9 +720,12 @@ if __name__ == "__main__":
     I tried to cancel one day before the renewal, but the page wasn't working. \
     Please refund and ensure I won't be billed again!"
 
-    final = investigate(user_message=USER_MESSAGE)
+    final, trace_id = investigate(
+        user_message=USER_MESSAGE, client=client, handler=handler, sync=True
+    )
 
     print("\n=== AI Agent final response ===")
     print(final)
+    print(f"Trace ID: {trace_id}")
 
     client.tracer.flush(timeout=15)
