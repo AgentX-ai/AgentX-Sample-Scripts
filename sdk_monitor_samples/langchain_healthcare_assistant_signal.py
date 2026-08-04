@@ -54,8 +54,10 @@ from langchain.agents.middleware import wrap_tool_call
 load_dotenv()
 
 client = AgentX(
-    api_key=os.getenv("AGENTX_API_KEY"),
-    base_url=os.getenv("BASE_URL"),
+    # api_key=os.getenv("AGENTX_API_KEY"),
+    api_key="agtx_local_67c733b0bed1db0dd534488d3ed0a1140a47419d59fd65c1",
+    base_url="http://localhost:4700/api/v1",
+    # base_url=os.getenv("BASE_URL"),
     workspace_id=os.getenv("WORKSPACE_ID"),
 )
 
