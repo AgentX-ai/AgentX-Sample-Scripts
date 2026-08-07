@@ -11,19 +11,27 @@ one where a tool the agent depends on fails partway through the loop, to show th
 call is still captured on the trace (the call, its error, and whatever the model already said),
 not silently lost.
 
+Every LLM call and tool call inside the `with client.tracer.trace(...)` block becomes its own
+real, linked child-span row (span_id/parent_span_id/session_id) — that's what lets the self-host
+dashboard's trace dialog show a real span tree (the same shape AgentX's OTel ingestion path
+produces): open a trace with more than one span and the tree panel renders above the usual detail
+view; click any span in it to see that span's own input/output below.
+
 patch_openai_client(oai, client.tracer) is what makes input/output token counts show up on these
 traces. Without it, a manually-wrapped raw OpenAI call has no way to report usage, span.input/
 span.output are the only public fields on a span, token counts are only ever populated by an
 auto-instrumented client (patched OpenAI/Anthropic, or a framework callback handler) making a call
-while a span is active, folded into whichever `with client.tracer.trace(...)` block is open at the
-time. Framework integrations (LangChain, CrewAI, ...) already do this automatically; a bare
-`openai.OpenAI()` client needs this one-line patch, tool calls or not.
+while a span is active — sent as that call's own child-span row of whichever `with
+client.tracer.trace(...)` block is open at the time. Framework integrations (LangChain, CrewAI,
+...) already do this automatically; a bare `openai.OpenAI()` client needs this one-line patch,
+tool calls or not.
 
 client.tracer.trace_tool_call(name, input=...) is the other half: a tool that runs in plain Python
 between two chat.completions.create() calls is invisible to the OpenAI patch above, since nothing
 about it touches the OpenAI client. Recording it manually is the same convention every hand-rolled
 tool-use loop in this repo uses, see ../sdk_trace_samples/anthropic_agent/anthropic_sdk_test_with_tool.py
-for the Anthropic equivalent.
+for the Anthropic equivalent — it becomes a real child span too, exactly like the LLM calls, since
+it reads the same active span.
 """
 
 import json
@@ -192,6 +200,8 @@ except ValueError as e:
 client.tracer.flush(timeout=10)
 
 print(
-    "\nBoth traces are visible now in the dashboard's Governance > Trace tab, tool calls included, "
-    "full input/output/error for each, no framework-specific instrumentation needed."
+    "\nBoth traces are visible now in the dashboard's Governance > Observe tab, tool calls included, "
+    "full input/output/error for each, no framework-specific instrumentation needed. Open either "
+    "one: the LLM call(s) and tool call each show up as their own span in the trace dialog's "
+    "span-tree panel."
 )

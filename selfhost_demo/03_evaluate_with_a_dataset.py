@@ -14,7 +14,12 @@ problem around.
 
 Note: the grading config below turns on every similarity metric (vector/BLEU/ROUGE/Jaccard), all
 four are fully computed on self-host (ported from the hosted platform's own algorithms into the
-shared judge-core package), not stubs.
+shared judge-core package), not stubs. It also attaches a code scorer, arbitrary JS run in-process
+per result (core/evaluate/codeScorer.ts), for grading logic no similarity metric or LLM judge can
+express directly, a word-count conciseness check below, but any function of (input, output,
+expected) works. No dedicated SDK method exists for this yet (dashboard-managed today), so this
+script POSTs codeScorers directly, same convention 07_trace_portability_cost_quality.py uses for
+its own SDK gap.
 
 The agent under test (support_agent below) is a real ReAct loop with a policy_lookup tool, not a
 single canned LLM call, most real agents look like this: the model decides whether to call a tool
@@ -49,7 +54,10 @@ def local_api_key() -> str:
     return resp.json()["apiKey"]
 
 
-client = AgentX(api_key=local_api_key(), base_url=BASE_URL)
+API_KEY = local_api_key()
+HEADERS = {"x-api-key": API_KEY}
+
+client = AgentX(api_key=API_KEY, base_url=BASE_URL)
 oai = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 patch_openai_client(oai, client.tracer)
 
@@ -200,17 +208,43 @@ def support_agent(case: EvaluationCase) -> Dict[str, Any]:
 # across other datasets/runs instead of rebuilding it each time. number_of_requests here takes
 # precedence over the dataset's own value once evaluation_settings_id is passed to .run() below, so
 # this is what actually controls repetitions per question, not the builder call above.
-evaluation_settings = client.evaluations.settings.builder(
-    name="Support Agent Strict Grading",
-    number_of_requests=2,
-    acceptance_criteria="Accurate, concise, grounded in the stated policy.",
-    rejection_criteria="Dismissive, ignores the question, or invents a policy.",
-    vector_similarity=True,
-    jaccard_similarity=True,
-    bleu_score=True,
-    rouge_score=True,
-).publish()
-print(f"Published grading config: {evaluation_settings.id}")
+#
+# codeScorers has no builder kwarg yet (see module docstring), so this uses the same POST
+# .builder(...).publish() would make, plus that one extra field, rather than mixing SDK and raw
+# REST calls for one config. "conciseness" below is the kind of check that's awkward to express as
+# a fixed similarity metric or an LLM judge rubric, but trivial as a few lines of code: a hard
+# word-count cutoff, checked exactly the same way on every run.
+evaluation_settings_payload = {
+    "name": "Support Agent Strict Grading",
+    "numberOfRequests": 2,
+    "acceptanceCriteria": "Accurate, concise, grounded in the stated policy.",
+    "rejectionCriteria": "Dismissive, ignores the question, or invents a policy.",
+    "vectorSimilarity": {"enabled": True},
+    "jaccardSimilarity": {"enabled": True},
+    "bleuScore": {"enabled": True},
+    "rougeScore": {"enabled": True},
+    "codeScorers": [
+        {
+            "name": "conciseness",
+            "enabled": True,
+            "code": (
+                "const wordCount = output.trim().split(/\\s+/).length;\n"
+                "if (wordCount <= 60) {\n"
+                "  return { score: 1, reasoning: `Concise: ${wordCount} words.` };\n"
+                "}\n"
+                "return { score: 0.5, reasoning: `Wordy: ${wordCount} words (over the 60-word guideline).` };"
+            ),
+        }
+    ],
+}
+evaluation_settings_resp = requests.post(
+    f"{BASE_URL}/custom-agent-evaluations/evaluation-settings",
+    headers=HEADERS,
+    json=evaluation_settings_payload,
+    timeout=10,
+).json()
+evaluation_settings_id = evaluation_settings_resp["_id"]
+print(f"Published grading config: {evaluation_settings_id}")
 
 
 # --- Step 4: run and score --------------------------------------------------------------------
@@ -222,7 +256,7 @@ run_context: EvaluationRunContext = (
     client.evaluations.run(
         dataset_id=dataset.id,
         subject={"kind": "custom_agent", "displayName": "Support Agent (demo)", "framework": "openai"},
-        evaluation_settings_id=evaluation_settings.id,
+        evaluation_settings_id=evaluation_settings_id,
     )
     .execute(support_agent)
     .finalize()
@@ -230,9 +264,7 @@ run_context: EvaluationRunContext = (
 
 # run_context._run.run_id: no public accessor for the run id exists on EvaluationRunContext yet
 # (only the rating properties above), so this reaches past the public API for it.
-run_detail = requests.get(
-    f"{BASE_URL}/evaluate/{run_context._run.run_id}", headers={"x-api-key": local_api_key()}, timeout=10
-).json()
+run_detail = requests.get(f"{BASE_URL}/evaluate/{run_context._run.run_id}", headers=HEADERS, timeout=10).json()
 ratings = [r["rating"] for r in run_detail["results"] if r.get("rating") is not None]
 
 print()
@@ -242,6 +274,13 @@ if ratings:
     for r in run_detail["results"]:
         print(f"  [{r['rating']:.0f}/10] {r['questionText']}")
         print(f"          {r['justification']}")
+        # The conciseness code scorer runs alongside the LLM judge and similarity metrics, not
+        # instead of them, each scorer's own failure (a throw, a timeout) would show up here as
+        # score: null with an error instead of taking down the rest of this result's scores.
+        for cs in r.get("codeScorerResults") or []:
+            score = f"{cs['score']:.2f}" if cs.get("score") is not None else "null"
+            detail = cs.get("error") or cs.get("reasoning") or ""
+            print(f"          code scorer '{cs['name']}': {score}  {detail}")
         # Every result carries the trace_id support_agent returned, this is what a low-rated
         # result's "View trace" link in the dashboard resolves, the same full execution timeline
         # (every LLM call, every tool call, in order) 02_trace_your_agent.py explains, not just

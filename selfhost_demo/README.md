@@ -39,7 +39,7 @@ Google framework integrations), see `../sdk_trace_samples/`, `../sdk_eval_sample
 |---|---|---|
 | `01_health_check.py` | Engine reachable, fresh install, seed data present | "Zero setup: one binary, no external dependencies required." |
 | `02_trace_your_agent.py` | Tracing a real ReAct tool-calling loop, framework-agnostic, error capture | "Works with whatever stack you're already running, LangChain or not, tool calls included." |
-| `03_evaluate_with_a_dataset.py` | Dataset-based eval of a tool-calling agent, LLM judge + similarity metrics (BLEU/ROUGE/vector/Jaccard) | "Regression testing for prompts, the same idea as a CI test suite." |
+| `03_evaluate_with_a_dataset.py` | Dataset-based eval of a tool-calling agent, LLM judge + similarity metrics (BLEU/ROUGE/vector/Jaccard) + a custom code scorer | "Regression testing for prompts, the same idea as a CI test suite. And if the built-in metrics don't cover it, write a few lines of JS." |
 | `04_online_evaluator_production_monitoring.py` | Continuous quality scoring of live traffic (including real tool-calling turns), no dataset needed | "Not just pre-release testing, this scores what's actually happening in production." |
 | `05_prompt_registry_autotune_loop.py` | Prompt-as-a-service + LLM-proposed rewrites from real evidence | "The prompt registry becomes your agent's source of truth, and improvement suggestions are grounded in your worst real examples, both from test runs and live traffic." |
 | `06_monitor_patterns_and_signals.py` | Failure-pattern detection (built-in + custom), signal triage | "Catches known failure modes automatically, no need to eyeball every conversation." |
@@ -57,9 +57,9 @@ Google framework integrations), see `../sdk_trace_samples/`, `../sdk_eval_sample
 - Online Evaluators are created and managed via `client.monitor.online_evaluators` (real SDK
   support: builder/get/list/update/delete/ratings/events, same shape as `client.monitor.patterns`).
   A few other things these scripts demonstrate still don't have a dedicated SDK method (the prompt
-  registry's `/propose` autotune call, model portability), so those specific calls use `requests`
-  directly against the same REST API the dashboard itself calls. That's called out inline wherever
-  it happens.
+  registry's `/propose` autotune call, model portability, code-based scorers on a grading config),
+  so those specific calls use `requests` directly against the same REST API the dashboard itself
+  calls. That's called out inline wherever it happens.
 - `05_prompt_registry_autotune_loop.py` goes deeper than `../sdk_eval_samples/prompt_registry_example.py`.
   That one shows the basics (register a prompt, tag a run, use `prompt.text` as your system
   prompt) and stops at "click Propose improvement in the dashboard." This one actually calls
