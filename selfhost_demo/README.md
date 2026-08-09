@@ -45,6 +45,7 @@ Google framework integrations), see `../sdk_trace_samples/`, `../sdk_eval_sample
 | `06_monitor_patterns_and_signals.py` | Failure-pattern detection (built-in + custom), signal triage | "Catches known failure modes automatically, no need to eyeball every conversation." |
 | `07_trace_portability_cost_quality.py` | Same conversation, replayed against cheaper/alternate models, cost + quality compared | "See what you'd save switching models before you actually switch." |
 | `08_full_governance_story.py` | All of the above, one continuous narrative | Use this one if you only have time to run a single script live. |
+| `09_agent_registration.py` | How an "agent" ends up in Overview's agent table in the first place | "No signup step for agents, either -- the name you trace under *is* its identity, everywhere." |
 
 ### Notes
 
@@ -57,8 +58,9 @@ Google framework integrations), see `../sdk_trace_samples/`, `../sdk_eval_sample
 - Online Evaluators are created and managed via `client.monitor.online_evaluators` (real SDK
   support: builder/get/list/update/delete/ratings/events, same shape as `client.monitor.patterns`).
   A few other things these scripts demonstrate still don't have a dedicated SDK method (the prompt
-  registry's `/propose` autotune call, model portability, code-based scorers on a grading config),
-  so those specific calls use `requests` directly against the same REST API the dashboard itself
+  registry's `/propose` autotune call, model portability, listing registered agents, code-based
+  scorers on a grading config), so those specific calls use `requests` directly against the same
+  REST API the dashboard itself
   calls. That's called out inline wherever it happens.
 - `05_prompt_registry_autotune_loop.py` goes deeper than `../sdk_eval_samples/prompt_registry_example.py`.
   That one shows the basics (register a prompt, tag a run, use `prompt.text` as your system
