@@ -62,6 +62,12 @@ Google framework integrations), see `../sdk_trace_samples/`, `../sdk_eval_sample
   scorers on a grading config), so those specific calls use `requests` directly against the same
   REST API the dashboard itself
   calls. That's called out inline wherever it happens.
+- **Custom Evaluators** (Governance → Monitor → Custom Evaluators) is a newer, related feature not
+  currently demoed by any script here: your own HTTP endpoint gets POSTed a sample of live traffic
+  and its `{matches, reason?, score?}` response decides whether a signal is raised, same shape as
+  Online Evaluators but judged by your own code instead of an LLM. Dashboard/REST-only for now
+  (`/agent-monitoring/custom-evaluators[/:id]`, plus a `/dry-run` endpoint for testing a URL before
+  saving it) — no `client.monitor.custom_evaluators` SDK method exists yet.
 - `05_prompt_registry_autotune_loop.py` goes deeper than `../sdk_eval_samples/prompt_registry_example.py`.
   That one shows the basics (register a prompt, tag a run, use `prompt.text` as your system
   prompt) and stops at "click Propose improvement in the dashboard." This one actually calls

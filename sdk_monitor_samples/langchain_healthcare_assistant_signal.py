@@ -36,12 +36,15 @@ What this script does:
 3. Runs scenario 2 (medication dosage/side effects) as a second, independently traced
    conversation and prints the agent's answer.
 
-Requires a Business/Enterprise-tier AgentX workspace (Monitor's entitlement gate).
+Requires a self-host engine (AgentX-trace-eval/engine) running locally — Monitor has no
+entitlement gate there, unlike the hosted SaaS platform. Defaults to http://localhost:4700/api/v1,
+override with AGENTX_SELFHOST_BASE_URL if the engine is running elsewhere.
 """
 
 import os
 import time
 
+import requests
 from dotenv import load_dotenv
 from agentx import AgentX
 from agentx.integrations.langchain import AgentXCallbackHandler
@@ -53,13 +56,19 @@ from langchain.agents.middleware import wrap_tool_call
 
 load_dotenv()
 
-client = AgentX(
-    # api_key=os.getenv("AGENTX_API_KEY"),
-    api_key="agtx_local_67c733b0bed1db0dd534488d3ed0a1140a47419d59fd65c1",
-    base_url="http://localhost:4700/api/v1",
-    # base_url=os.getenv("BASE_URL"),
-    workspace_id=os.getenv("WORKSPACE_ID"),
-)
+# No workspace_id, the API key alone selects the project. BASE_URL defaults to the local engine;
+# the key itself is fetched from the unauthenticated bootstrap endpoint the same way the dashboard
+# does on load, so nothing needs to be hand-copied into .env for this to run.
+BASE_URL = os.getenv("AGENTX_SELFHOST_BASE_URL", "http://localhost:4700/api/v1")
+
+
+def local_api_key() -> str:
+    resp = requests.get(f"{BASE_URL}/dev/bootstrap", timeout=5)
+    resp.raise_for_status()
+    return resp.json()["apiKey"]
+
+
+client = AgentX(api_key=local_api_key(), base_url=BASE_URL)
 
 handler = AgentXCallbackHandler(
     tracer=client.tracer,

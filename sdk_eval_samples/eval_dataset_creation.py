@@ -1,17 +1,25 @@
 import os
 
+import requests
 from dotenv import load_dotenv
 from agentx import AgentX
 from agentx.evaluations.models import Dataset
 
 load_dotenv()
 
+# Self-host: no workspace_id, the API key alone selects the project. BASE_URL defaults to the
+# local engine; the key itself is fetched from the unauthenticated bootstrap endpoint the same way
+# the dashboard does on load, so nothing needs to be hand-copied into .env for this to run.
+BASE_URL = os.getenv("AGENTX_SELFHOST_BASE_URL", "http://localhost:4700/api/v1")
 
-client = AgentX(
-    api_key=os.getenv("AGENTX_API_KEY"),
-    base_url=os.getenv("BASE_URL"),
-    workspace_id=os.getenv("WORKSPACE_ID"),
-)
+
+def local_api_key() -> str:
+    resp = requests.get(f"{BASE_URL}/dev/bootstrap", timeout=5)
+    resp.raise_for_status()
+    return resp.json()["apiKey"]
+
+
+client = AgentX(api_key=local_api_key(), base_url=BASE_URL)
 
 
 # Build a reusable dataset of billing & subscription support scenarios. Each case pairs a realistic

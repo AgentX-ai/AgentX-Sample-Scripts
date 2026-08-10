@@ -1,4 +1,5 @@
 import os
+import requests
 from dotenv import load_dotenv
 from agentx import AgentX
 from agentx.integrations.openai_agents import AgentXTracingProcessor
@@ -6,11 +7,19 @@ from agents import Agent, Runner, add_trace_processor, function_tool
 
 load_dotenv()
 
-client = AgentX(
-    api_key=os.getenv("AGENTX_API_KEY"),
-    workspace_id=os.getenv("WORKSPACE_ID"),
-    base_url=os.getenv("BASE_URL"),
-)
+# No workspace_id, the API key alone selects the project. BASE_URL defaults to the local engine;
+# the key itself is fetched from the unauthenticated bootstrap endpoint the same way the dashboard
+# does on load, so nothing needs to be hand-copied into .env for this to run.
+BASE_URL = os.getenv("AGENTX_SELFHOST_BASE_URL", "http://localhost:4700/api/v1")
+
+
+def local_api_key() -> str:
+    resp = requests.get(f"{BASE_URL}/dev/bootstrap", timeout=5)
+    resp.raise_for_status()
+    return resp.json()["apiKey"]
+
+
+client = AgentX(api_key=local_api_key(), base_url=BASE_URL)
 
 add_trace_processor(
     AgentXTracingProcessor(

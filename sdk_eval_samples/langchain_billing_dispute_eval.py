@@ -12,8 +12,9 @@ rather than reimplementing them, and calls it with sync=True so each result link
 Install:
     pip install agentx-python langchain langchain-openai
 
-Run:
-    AGENTX_API_KEY=... OPENAI_API_KEY=... python langchain_billing_dispute_eval.py
+Run against a local self-host engine (default http://localhost:4700/api/v1, override with
+AGENTX_SELFHOST_BASE_URL):
+    OPENAI_API_KEY=... python langchain_billing_dispute_eval.py
 """
 
 import os
@@ -21,11 +22,12 @@ import sys
 from pathlib import Path
 from typing import Any, Dict
 
+import requests
 from dotenv import load_dotenv
 
 from agentx import AgentX
 from agentx.integrations.langchain import AgentXCallbackHandler
-from agentx.evaluations.models import EvaluationCase, Report
+from agentx.evaluations.models import Dataset, EvaluationCase, EvaluationSettings
 from agentx.evaluations.runner import EvaluationRunContext
 
 load_dotenv()
@@ -37,11 +39,19 @@ sys.path.insert(0, str(TRACE_SAMPLE_DIR))
 
 from langchain_billing_dispute_investigation import investigate
 
-client = AgentX(
-    api_key=os.getenv("AGENTX_API_KEY"),
-    base_url=os.getenv("BASE_URL"),
-    workspace_id=os.getenv("WORKSPACE_ID"),
-)
+# No workspace_id, the API key alone selects the project. BASE_URL defaults to the local engine;
+# the key itself is fetched from the unauthenticated bootstrap endpoint the same way the dashboard
+# does on load, so nothing needs to be hand-copied into .env for this to run.
+BASE_URL = os.getenv("AGENTX_SELFHOST_BASE_URL", "http://localhost:4700/api/v1")
+
+
+def local_api_key() -> str:
+    resp = requests.get(f"{BASE_URL}/dev/bootstrap", timeout=5)
+    resp.raise_for_status()
+    return resp.json()["apiKey"]
+
+
+client = AgentX(api_key=local_api_key(), base_url=BASE_URL)
 
 handler = AgentXCallbackHandler(
     tracer=client.tracer,
@@ -49,8 +59,62 @@ handler = AgentXCallbackHandler(
     session_id="session-001",  # custom session id for the agent
 )
 
-dataset_id = "6a628215ab10849d2abf4000"  # "Billing dispute" dataset
-eval_settings_id = "6a6186c5df2374920f2b15cc"
+# No dataset/eval-settings id is portable across installs, so both are built fresh here rather
+# than referencing a fixed hosted-platform id — investigate()'s own mock backend (customer,
+# subscription, invoice, refund ledger) is fixed for every call regardless of the case, only the
+# wording of the customer's message varies per case, see billing_dispute_agent's own comment below.
+dataset: Dataset = (
+    client.evaluations.datasets.builder(
+        name="Billing Dispute Investigation Eval",
+        description="Cases for the LangChain billing-dispute investigation agent.",
+        number_of_requests=1,
+        acceptance_criteria=(
+            "Warm, concise, and factual: explains what was found and what was done, references "
+            "the relevant policy in plain language, and never exposes internal reasoning, "
+            "confidence scores, or system details."
+        ),
+        rejection_criteria=(
+            "No invented policy details, no promising an outcome that contradicts the "
+            "investigation, no exposing internal risk/eligibility scoring."
+        ),
+    )
+    .add_case(
+        query=(
+            "I was charged $499 for an annual plan renewal yesterday, I tried to cancel one day "
+            "before the renewal, but the page wasn't working. Please refund and ensure I won't be "
+            "billed again!"
+        ),
+        expected_results=(
+            "Acknowledges the failed cancellation attempt, explains a refund was issued (or "
+            "escalated for review), confirms the subscription is canceled, and confirms auto-renew "
+            "is disabled."
+        ),
+    )
+    .add_case(
+        query="Why was I charged for a renewal when I'm sure I canceled in time?",
+        expected_results=(
+            "Investigates the cancellation timing against the renewal date before concluding, and "
+            "explains the outcome without blaming the customer."
+        ),
+    )
+    .publish()
+)
+dataset_id = dataset.id
+
+eval_settings: EvaluationSettings = client.evaluations.settings.builder(
+    name="Billing Dispute Investigation Eval Config",
+    number_of_requests=1,
+    acceptance_criteria=(
+        "Warm, concise, and factual: explains what was found and what was done, references the "
+        "relevant policy in plain language, and never exposes internal reasoning, confidence "
+        "scores, or system details."
+    ),
+    rejection_criteria=(
+        "No invented policy details, no promising an outcome that contradicts the investigation, "
+        "no exposing internal risk/eligibility scoring."
+    ),
+).publish()
+eval_settings_id = eval_settings.id
 
 
 def billing_dispute_agent(case: EvaluationCase) -> Dict[str, Any]:
@@ -81,13 +145,23 @@ run_context: EvaluationRunContext = (
     .finalize()
 )
 
-# Available immediately, no .analyze() call needed just to see the score.
-print(
-    f"Average rating: {run_context.average_rating:.2f} ({run_context.rated_count} rated)"
-)
-
-report: Report = run_context.analyze()
-print(f"Dashboard: {report.dashboard_url}")
+# run_context.average_rating reads a `liveStatistics` field the hosted SaaS API returns but
+# self-host's engine doesn't populate yet, so it comes back None here even though every result was
+# genuinely scored (self-host's holistic .analyze() report endpoint isn't implemented either, same
+# gap). Pull the per-question ratings directly from the run instead and average them here — same
+# workaround as selfhost_demo/03_evaluate_with_a_dataset.py.
+# run_context._run.run_id: no public accessor for the run id exists on EvaluationRunContext yet.
+run_detail = requests.get(
+    f"{BASE_URL}/evaluate/{run_context._run.run_id}",
+    headers={"x-api-key": client.api_key},
+    timeout=10,
+).json()
+ratings = [r["rating"] for r in run_detail["results"] if r.get("rating") is not None]
+if ratings:
+    print(f"Average rating: {sum(ratings) / len(ratings):.2f} ({len(ratings)} rated)")
+else:
+    print("(No ratings yet.)")
+print(f"Dashboard: {BASE_URL.removesuffix('/api/v1')}")
 
 # Every investigate() call above already used sync=True, so nothing is queued at this point;
 # this is just a defensive no-op safety net in case anything else on this client ever sends async.

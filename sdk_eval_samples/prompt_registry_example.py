@@ -9,13 +9,14 @@ LLM-judge-proposed rewrite (based on your worst-rated real examples) in the dash
 whether to publish it as a new version. Nothing ever gets rewritten automatically.
 
 Requires a self-host engine (AgentX-trace-eval/engine) running locally — the prompt registry has
-no equivalent on the hosted SaaS backend. Point BASE_URL at it, e.g.:
-    BASE_URL=http://localhost:4700/api/v1
+no equivalent on the hosted SaaS backend. Defaults to http://localhost:4700/api/v1, override with
+AGENTX_SELFHOST_BASE_URL if the engine is running elsewhere.
 """
 
 import os
 from typing import Any, Dict
 
+import requests
 from dotenv import load_dotenv
 from openai import OpenAI
 from agentx import AgentX
@@ -25,11 +26,19 @@ from agentx.evaluations.runner import EvaluationRunContext
 
 load_dotenv()
 
-client = AgentX(
-    api_key=os.getenv("AGENTX_API_KEY"),
-    base_url=os.getenv("BASE_URL"),
-    workspace_id=os.getenv("WORKSPACE_ID"),
-)
+# No workspace_id, the API key alone selects the project. BASE_URL defaults to the local engine;
+# the key itself is fetched from the unauthenticated bootstrap endpoint the same way the dashboard
+# does on load, so nothing needs to be hand-copied into .env for this to run.
+BASE_URL = os.getenv("AGENTX_SELFHOST_BASE_URL", "http://localhost:4700/api/v1")
+
+
+def local_api_key() -> str:
+    resp = requests.get(f"{BASE_URL}/dev/bootstrap", timeout=5)
+    resp.raise_for_status()
+    return resp.json()["apiKey"]
+
+
+client = AgentX(api_key=local_api_key(), base_url=BASE_URL)
 oai = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 PROMPT_NAME = "support-agent-system-prompt"

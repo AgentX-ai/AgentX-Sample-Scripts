@@ -1,6 +1,7 @@
 import os
 from typing import Any, Dict
 
+import requests
 from dotenv import load_dotenv
 from openai import OpenAI
 from agentx import AgentX
@@ -14,17 +15,27 @@ from agentx.evaluations.runner import EvaluationRunContext
 
 load_dotenv()
 
+# Self-host: no workspace_id, the API key alone selects the project. BASE_URL defaults to the
+# local engine; the key itself is fetched from the unauthenticated bootstrap endpoint the same way
+# the dashboard does on load, so nothing needs to be hand-copied into .env for this to run.
+BASE_URL = os.getenv("AGENTX_SELFHOST_BASE_URL", "http://localhost:4700/api/v1")
 
-client = AgentX(
-    api_key=os.getenv("AGENTX_API_KEY"),
-    base_url=os.getenv("BASE_URL"),
-    workspace_id=os.getenv("WORKSPACE_ID"),
-)
+
+def local_api_key() -> str:
+    resp = requests.get(f"{BASE_URL}/dev/bootstrap", timeout=5)
+    resp.raise_for_status()
+    return resp.json()["apiKey"]
+
+
+client = AgentX(api_key=local_api_key(), base_url=BASE_URL)
 
 oai = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-dataset_id: str = "6a615e9bc3f237a121f85fde"  # replace with your dataset id
-create_dataset: bool = False  # set to True to create a new dataset
+dataset_id: str = ""  # replace with your dataset id to reuse an existing one
+# No dataset id above is portable across installs, so this always builds a fresh one when unset —
+# in practice you'd usually reuse an existing dataset_id (created once via the dashboard or this
+# builder) across many runs instead of rebuilding it every time.
+create_dataset: bool = not dataset_id
 
 if create_dataset:
     # Build a small dataset inline so this script is runnable standalone. In practice you'd usually
