@@ -36,7 +36,7 @@ What this script does:
 3. Runs scenario 2 (medication dosage/side effects) as a second, independently traced
    conversation and prints the agent's answer.
 
-Requires a self-host engine (AgentX-trace-eval/engine) running locally — Monitor has no
+Requires a self-host engine (AgentX-trace-eval/engine) running locally - Monitor has no
 entitlement gate there, unlike the hosted SaaS platform. Defaults to http://localhost:4700/api/v1,
 override with AGENTX_SELFHOST_BASE_URL if the engine is running elsewhere.
 """

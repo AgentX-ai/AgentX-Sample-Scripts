@@ -1,14 +1,14 @@
 """
-Prompt registry example — self-host only.
+Prompt registry example - self-host only.
 
 Demonstrates AgentX's prompt registry (client.evaluations.prompts): the external-agent analog to
 native Autotune. AgentX doesn't own your agent's code, so instead of branching/merging a config it
-becomes your prompt's source of truth — you fetch it at runtime, use it as your agent's actual
+becomes your prompt's source of truth - you fetch it at runtime, use it as your agent's actual
 system prompt, and tag your evaluation runs with which version you used. A human then reviews an
 LLM-judge-proposed rewrite (based on your worst-rated real examples) in the dashboard and decides
 whether to publish it as a new version. Nothing ever gets rewritten automatically.
 
-Requires a self-host engine (AgentX-trace-eval/engine) running locally — the prompt registry has
+Requires a self-host engine (AgentX-trace-eval/engine) running locally - the prompt registry has
 no equivalent on the hosted SaaS backend. Defaults to http://localhost:4700/api/v1, override with
 AGENTX_SELFHOST_BASE_URL if the engine is running elsewhere.
 """
@@ -102,7 +102,7 @@ print(f"Published dataset: {dataset.id}")
 # This is what makes the prompt registry's "worst rated examples" / "propose improvement" feature
 # (dashboard: Governance -> Evaluate -> Prompts) able to find this run afterward: the engine reads
 # subject.metadata.promptName off every evaluation run and matches it against each registered
-# prompt's name — no dedicated SDK field, just this one convention.
+# prompt's name - no dedicated SDK field, just this one convention.
 run_context: EvaluationRunContext = (
     client.evaluations.run(
         dataset_id=dataset.id,
@@ -122,12 +122,12 @@ run_context: EvaluationRunContext = (
 report: Report = run_context.analyze()
 
 # .analyze()'s holistic report generation (POST /runs/{id}/analyze) isn't implemented on every
-# self-host engine version yet — per-question results are still scored and saved either way
+# self-host engine version yet - per-question results are still scored and saved either way
 # (that happened during .execute()/.finalize() above), so this only guards the summary print.
 if report.average_rating is not None:
     print(f"\nAverage rating: {report.average_rating:.2f}")
 else:
-    print("\n(No holistic report from this engine — per-question ratings were still recorded; see the dashboard.)")
+    print("\n(No holistic report from this engine - per-question ratings were still recorded; see the dashboard.)")
 if report.dashboard_url:
     print(f"Dashboard: {report.dashboard_url}")
 
@@ -135,6 +135,6 @@ print(
     "\nNext: open Governance -> Evaluate -> Prompts in the self-host dashboard, select "
     f'"{prompt.name}", and click "Propose improvement". The engine gathers every tagged run\'s '
     "worst-rated examples, asks an LLM judge to rewrite the prompt to fix the recurring issues, "
-    "and shows you the diff — publishing it as a new version is a separate, explicit click. "
+    "and shows you the diff - publishing it as a new version is a separate, explicit click. "
     "Nothing is ever rewritten automatically."
 )

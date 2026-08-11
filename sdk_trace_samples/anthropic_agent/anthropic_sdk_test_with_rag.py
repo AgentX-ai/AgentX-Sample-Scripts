@@ -60,7 +60,7 @@ MODEL = "claude-haiku-4-5-20251001"
 question = "How do I cancel my subscription?"
 
 # trace_retrieval/record_retrieval only ever record a child span of the currently active span
-# (Tracer.current_span) — a no-op with nothing to attach to if called outside a `with
+# (Tracer.current_span) - a no-op with nothing to attach to if called outside a `with
 # tracer.trace(...)` block, see that method's own docstring. So the retrieval and the LLM call
 # both need to happen inside one orchestrator span, same pattern
 # anthropic_sdk_test_with_tool.py uses, for the retrieval step to actually show up on the trace

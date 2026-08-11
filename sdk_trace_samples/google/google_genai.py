@@ -30,14 +30,14 @@ patch_genai_client(
     metadata={"env": "production"},
 )
 
-# Regular call — traced automatically
+# Regular call - traced automatically
 response = genai_client.models.generate_content(
     contents="How do I cancel my subscription?",
     model="gemini-3.5-flash",
 )
 print(response.text)
 
-# # Streaming call — also traced automatically
+# # Streaming call - also traced automatically
 # for chunk in genai_client.models.generate_content_stream(
 #     contents="What is your refund policy?",
 #     model="gemini-3.5-flash",

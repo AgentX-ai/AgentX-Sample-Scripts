@@ -33,7 +33,7 @@ patch_anthropic_client(
     session_id="session-xyz-789",
 )
 # name/metadata/session_id above are only used for messages.create() calls
-# made outside an active `with tracer.trace(...)` span — the loop below runs
+# made outside an active `with tracer.trace(...)` span - the loop below runs
 # inside one, so its own name/metadata/session_id take over instead.
 
 
@@ -81,7 +81,7 @@ messages = [{"role": "user", "content": question}]
 # Wrap the whole agentic loop in one span. Every messages.create() call made
 # while this span is active is aggregated as its own "LLM Call N" step on a
 # single trace (in call order, interleaved with tool calls), instead of each
-# call producing its own separate trace — see Tracer.current_span.
+# call producing its own separate trace - see Tracer.current_span.
 with agentx_client.tracer.trace(
     "claude-support-agent-tool",
     framework="anthropic",
@@ -113,7 +113,7 @@ with agentx_client.tracer.trace(
             fn = TOOL_REGISTRY.get(block.name)
 
             # The tool executes in plain Python between two messages.create()
-            # calls, so the Anthropic patch can't see it — record it
+            # calls, so the Anthropic patch can't see it - record it
             # manually, by its real name, so any tool the model calls shows
             # up in the trace.
             with agentx_client.tracer.trace_tool_call(

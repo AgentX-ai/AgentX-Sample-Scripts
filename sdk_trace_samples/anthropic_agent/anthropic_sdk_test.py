@@ -33,14 +33,14 @@ patch_anthropic_client(
     session_id="session-xyz-789",
 )
 
-# Regular call — traced automatically
+# Regular call - traced automatically
 response = client.messages.create(
     model="claude-haiku-4-5-20251001",
     max_tokens=256,
     messages=[{"role": "user", "content": "How do I cancel my subscription?"}],
 )
 
-# Streaming call — also traced automatically
+# Streaming call - also traced automatically
 with client.messages.stream(
     model="claude-haiku-4-5-20251001",
     max_tokens=256,

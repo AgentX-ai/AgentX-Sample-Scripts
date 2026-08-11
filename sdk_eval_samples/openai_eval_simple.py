@@ -32,7 +32,7 @@ client = AgentX(api_key=local_api_key(), base_url=BASE_URL)
 oai = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 dataset_id: str = ""  # replace with your dataset id to reuse an existing one
-# No dataset id above is portable across installs, so this always builds a fresh one when unset —
+# No dataset id above is portable across installs, so this always builds a fresh one when unset -
 # in practice you'd usually reuse an existing dataset_id (created once via the dashboard or this
 # builder) across many runs instead of rebuilding it every time.
 create_dataset: bool = not dataset_id
@@ -63,7 +63,7 @@ if create_dataset:
 
 def support_agent(case: EvaluationCase) -> Dict[str, Any]:
     # sync=True blocks until AgentX has ingested the trace, so span.trace_id is populated by the
-    # time the `with` block exits — the default (fire-and-forget) mode never learns the trace_id,
+    # time the `with` block exits - the default (fire-and-forget) mode never learns the trace_id,
     # since it's queued and sent on a background thread. Attaching trace_id to the eval result
     # below is what makes this case's "Message Trace Details -> Execution Timeline" viewable
     # alongside its score in the dashboard.
@@ -90,7 +90,7 @@ def support_agent(case: EvaluationCase) -> Dict[str, Any]:
     }
 
 
-# A standalone, reusable grading config — independent of the dataset's own twin config, and with
+# A standalone, reusable grading config - independent of the dataset's own twin config, and with
 # all similarity metrics turned on (each defaults to False, both here and on the dataset itself).
 # Reuse this same settings id across other datasets/runs instead of rebuilding it each time.
 evaluation_settings: EvaluationSettings = client.evaluations.settings.builder(
@@ -106,7 +106,7 @@ evaluation_settings: EvaluationSettings = client.evaluations.settings.builder(
 print(f"Published evaluation settings: {evaluation_settings.id}")
 
 # Each step's return type is annotated explicitly: .execute()/.finalize() both return
-# EvaluationRunContext (no scores yet — those need scoring+analysis first); only .analyze()
+# EvaluationRunContext (no scores yet - those need scoring+analysis first); only .analyze()
 # returns a Report. Keeping run_context and report as two separately typed variables means a type
 # checker (mypy/pyright) catches it immediately if .analyze() is ever skipped/commented out and
 # something then tries to read report.average_rating off the wrong type.

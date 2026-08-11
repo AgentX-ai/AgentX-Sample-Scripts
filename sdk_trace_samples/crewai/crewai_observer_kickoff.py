@@ -9,7 +9,7 @@ from crewai import Agent, Task, Crew
 load_dotenv()
 
 # CrewAI's own LLM resolver (crewai/utilities/llm_utils.py) reads a bare BASE_URL env var as a
-# generic "point my LLM calls at this OpenAI-compatible endpoint" override — same generic name
+# generic "point my LLM calls at this OpenAI-compatible endpoint" override - same generic name
 # this repo's .env uses for AgentX's own (hosted-platform) base URL, an unrelated collision. Clear
 # it before constructing anything, so CrewAI's default LLM still calls the real OpenAI API instead
 # of trying to connect to whatever that value happened to be.

@@ -32,7 +32,7 @@ client = AgentX(api_key=local_api_key(), base_url=BASE_URL)
 oai = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 dataset_id: str = ""  # replace with your dataset id to reuse an existing one
-# No dataset id above is portable across installs, so this always builds a fresh one when unset —
+# No dataset id above is portable across installs, so this always builds a fresh one when unset -
 # in practice you'd usually reuse an existing dataset_id (created once via the dashboard or this
 # builder) across many runs instead of rebuilding it every time.
 create_dataset: bool = not dataset_id
@@ -79,7 +79,7 @@ def support_agent(case: EvaluationCase) -> Dict[str, Any]:
 
 evaluation_settings_id: str = ""  # replace with eval config id to reuse an existing one
 if not evaluation_settings_id:
-    # No id above is portable across installs, so this always builds a fresh config when unset —
+    # No id above is portable across installs, so this always builds a fresh config when unset -
     # in practice you'd usually reuse an existing evaluation_settings_id across many runs.
     evaluation_settings: EvaluationSettings = client.evaluations.settings.builder(
         name="two runs - Strict",
@@ -96,7 +96,7 @@ if not evaluation_settings_id:
 print(f"Published evaluation settings: {evaluation_settings_id}")
 
 # Each step's return type is annotated explicitly: .execute()/.finalize() both return
-# EvaluationRunContext (no scores yet — those need scoring+analysis first); only .analyze()
+# EvaluationRunContext (no scores yet - those need scoring+analysis first); only .analyze()
 # returns a Report. Keeping run_context and report as two separately typed variables means a type
 # checker (mypy/pyright) catches it immediately if .analyze() is ever skipped/commented out and
 # something then tries to read report.average_rating off the wrong type.

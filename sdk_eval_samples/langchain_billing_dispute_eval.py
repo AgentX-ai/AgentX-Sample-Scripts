@@ -60,7 +60,7 @@ handler = AgentXCallbackHandler(
 )
 
 # No dataset/eval-settings id is portable across installs, so both are built fresh here rather
-# than referencing a fixed hosted-platform id — investigate()'s own mock backend (customer,
+# than referencing a fixed hosted-platform id - investigate()'s own mock backend (customer,
 # subscription, invoice, refund ledger) is fixed for every call regardless of the case, only the
 # wording of the customer's message varies per case, see billing_dispute_agent's own comment below.
 dataset: Dataset = (
@@ -148,7 +148,7 @@ run_context: EvaluationRunContext = (
 # run_context.average_rating reads a `liveStatistics` field the hosted SaaS API returns but
 # self-host's engine doesn't populate yet, so it comes back None here even though every result was
 # genuinely scored (self-host's holistic .analyze() report endpoint isn't implemented either, same
-# gap). Pull the per-question ratings directly from the run instead and average them here — same
+# gap). Pull the per-question ratings directly from the run instead and average them here - same
 # workaround as selfhost_demo/03_evaluate_with_a_dataset.py.
 # run_context._run.run_id: no public accessor for the run id exists on EvaluationRunContext yet.
 run_detail = requests.get(

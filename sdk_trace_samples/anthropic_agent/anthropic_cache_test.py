@@ -29,7 +29,7 @@ patch_anthropic_client(
 )
 
 # Anthropic only caches a prompt block once it clears a per-model token floor (2048 for Haiku
-# models) — repeat a long passage well past that, and mark it cacheable with cache_control.
+# models) - repeat a long passage well past that, and mark it cacheable with cache_control.
 SYSTEM_PROMPT = (
     "You are a support agent for AgentX. Follow these policies exactly.\n\n"
     + ("Policy: Refunds are issued within 30 days of purchase if the product is unused. " * 400)

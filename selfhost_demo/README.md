@@ -5,9 +5,10 @@ trace an agent, evaluate it against a dataset, catch failures in production traf
 prompt registry's autotune loop. Each script is runnable on its own (same convention as the rest
 of `sample-scripts`), so you can jump straight to whichever one matches what you want to show.
 
-For general SDK examples against the hosted SaaS platform (LangChain/CrewAI/OpenAI/Anthropic/
-Google framework integrations), see `../sdk_trace_samples/`, `../sdk_eval_samples/`, and
-`../sdk_monitor_samples/` instead; this folder is self-host only.
+For per-framework SDK integration examples (LangChain/CrewAI/OpenAI/Anthropic/Google GenAI), see
+`../sdk_trace_samples/`, `../sdk_eval_samples/`, and `../sdk_monitor_samples/` - those also run
+against the local self-host engine by default (same zero-setup key bootstrap as here), they're
+just organized by framework rather than by governance feature.
 
 ### Before the demo
 
@@ -46,6 +47,7 @@ Google framework integrations), see `../sdk_trace_samples/`, `../sdk_eval_sample
 | `07_trace_portability_cost_quality.py` | Same conversation, replayed against cheaper/alternate models, cost + quality compared | "See what you'd save switching models before you actually switch." |
 | `08_full_governance_story.py` | All of the above, one continuous narrative | Use this one if you only have time to run a single script live. |
 | `09_agent_registration.py` | How an "agent" ends up in Overview's agent table in the first place | "No signup step for agents, either -- the name you trace under *is* its identity, everywhere." |
+| `10_session_coherence_and_tool_improvement.py` | Session-level coherence judging over a real multi-turn session (real traced LLM calls + a genuinely failing tool call, scripted replies), plus tool-schema and prompt improvement fed by that same session's evidence | "Every individual reply looked fine; the conversation as a whole fell apart. AgentX catches that too, and turns it into concrete rewrites of both the prompt and the tool definition." |
 
 ### Notes
 
@@ -67,11 +69,21 @@ Google framework integrations), see `../sdk_trace_samples/`, `../sdk_eval_sample
   and its `{matches, reason?, score?}` response decides whether a signal is raised, same shape as
   Online Evaluators but judged by your own code instead of an LLM. Dashboard/REST-only for now
   (`/agent-monitoring/custom-evaluators[/:id]`, plus a `/dry-run` endpoint for testing a URL before
-  saving it) — no `client.monitor.custom_evaluators` SDK method exists yet.
+  saving it) - no `client.monitor.custom_evaluators` SDK method exists yet.
 - `05_prompt_registry_autotune_loop.py` goes deeper than `../sdk_eval_samples/prompt_registry_example.py`.
   That one shows the basics (register a prompt, tag a run, use `prompt.text` as your system
   prompt) and stops at "click Propose improvement in the dashboard." This one actually calls
   `/propose` end to end, and demonstrates the merged evidence feed (eval-run examples *and*
   Online Evaluator-scored production traces feeding the same rewrite).
+- **Session-scoped Online Evaluators**: `client.monitor.online_evaluators.builder(...,
+  scope="session", idle_seconds=120)` judges whole conversations instead of individual traces -
+  the engine's idle-session sweep scores a multi-turn session once it's been quiet that long, and
+  re-scores it if the conversation resumes. `10_session_coherence...`'s session is the natural
+  thing to point one at: create the evaluator, wait an idle window (or POST
+  `/agent-monitoring/session-sweep/run`), and the verdict appears in the session's detail view
+  plus a Signal if it scores below the alert threshold.
+- **Outcome reporting**: `client.outcomes.report(trace_id=..., outcome="reopened",
+  is_negative=True)` feeds real after-the-fact results (a reopened ticket, a human confirmation)
+  back against traces - the ground truth behind Overview's Judge Calibration card.
 - Self-host has no multi-tenant/workspace model, so there's no `WORKSPACE_ID` to set, unlike the
   hosted-platform samples elsewhere in this repo.

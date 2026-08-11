@@ -65,7 +65,7 @@ REFUND_FAILS_FIRST_ATTEMPT = True  # simulate a gateway timeout + retry
 
 
 # ===========================================================================
-# Structured outputs — makes the multi-LLM architecture explicit in the trace.
+# Structured outputs - makes the multi-LLM architecture explicit in the trace.
 # ===========================================================================
 class IntentClassification(BaseModel):
     intents: List[str] = Field(
@@ -108,7 +108,7 @@ class ActionValidation(BaseModel):
 # Versioned policy knowledge base -> a real, date-filterable vector store.
 # ===========================================================================
 def policy_retriever_as_of(as_of: date, k: int = 3):
-    """Retriever that only returns policies in effect on ``as_of`` — this is
+    """Retriever that only returns policies in effect on ``as_of`` - this is
     what lets the agent select the policy version active on the transaction
     date instead of the current one."""
     POLICY_DOCS: List[Dict[str, Any]] = [
@@ -205,7 +205,7 @@ def fmt_docs(docs: List[Document]) -> str:
 
 
 # ===========================================================================
-# Account / billing tools (read-only) — bound to the investigation agent.
+# Account / billing tools (read-only) - bound to the investigation agent.
 # ===========================================================================
 @tool
 def get_customer_profile(customer_id: str) -> dict:
@@ -301,7 +301,7 @@ def get_support_history(customer_id: str) -> dict:
 
 
 # ===========================================================================
-# Action tools (state-changing) — bound to the execution agent.
+# Action tools (state-changing) - bound to the execution agent.
 # ===========================================================================
 _REFUND_LEDGER: Dict[str, Dict[str, Any]] = {}
 _refund_attempts = {"count": 0}
@@ -319,7 +319,7 @@ def check_refund_status(invoice_id: str) -> dict:
 def issue_refund(invoice_id: str, amount: float, reason_code: str) -> dict:
     """
     Issue a refund for an invoice. Idempotent per invoice: retrying with the
-    same invoice never double-refunds. The first call may time out — if it does,
+    same invoice never double-refunds. The first call may time out - if it does,
     call check_refund_status and then retry once.
     """
     time.sleep(0.05)
@@ -330,7 +330,7 @@ def issue_refund(invoice_id: str, amount: float, reason_code: str) -> dict:
     _refund_attempts["count"] += 1
     if REFUND_FAILS_FIRST_ATTEMPT and _refund_attempts["count"] == 1:
         # Return a timeout status (rather than raising) so the agent sees the
-        # failure, checks status, and safely retries — no refund is recorded,
+        # failure, checks status, and safely retries - no refund is recorded,
         # so the retry is not a double-refund.
         return {
             "status": "timeout",
@@ -404,7 +404,7 @@ ACTION_TOOLS = [
 
 
 # ===========================================================================
-# LLM helpers — every call is its own trace (own model, tokens, latency).
+# LLM helpers - every call is its own trace (own model, tokens, latency).
 # ===========================================================================
 def run_structured(name, model, system, payload, schema, handler=None):
     llm = ChatOpenAI(model=model, temperature=0).with_structured_output(schema)
@@ -439,7 +439,7 @@ def run_agent(name, model, tools, system_prompt, user_content, handler):
 
 
 # ===========================================================================
-# Main Agent Orchestration — the whole investigation runs inside one orchestrator span.
+# Main Agent Orchestration - the whole investigation runs inside one orchestrator span.
 # ===========================================================================
 def investigate(
     user_message: str,
@@ -535,7 +535,7 @@ def investigate(
         # Each runs on its own thread via ThreadPoolExecutor below. The
         # tracer's active-span tracking is per-thread, so `orch` (opened on
         # the main thread) isn't automatically visible inside a worker
-        # thread — wrap each worker body in `client.tracer.use_span(orch)`
+        # thread - wrap each worker body in `client.tracer.use_span(orch)`
         # to attach it, so these steps still land on the orchestrator trace
         # instead of becoming their own separate traces.
         def run_policy():
