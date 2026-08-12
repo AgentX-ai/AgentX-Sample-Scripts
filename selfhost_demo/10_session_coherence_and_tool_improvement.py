@@ -178,8 +178,15 @@ TURNS = [
 
 
 def search_orders(q: str, should_fail: bool) -> str:
+    # A validation-style rejection, not a transient timeout: the whole tool-improvement story is
+    # "the LLM formed the call wrong because the schema under-specifies it", and the error message
+    # is how a real tool teaches the judge what the parameter should have been. With this error
+    # (plus the malformed arguments) in the failure evidence, Suggest improvement has grounds to
+    # restructure the parameter itself (order_id, digits only), not just pad the description.
     if should_fail:
-        raise ValueError(f"order lookup timed out for query {q!r}")
+        raise ValueError(
+            f"invalid order query {q!r}: search_orders expects a numeric order id (digits only), e.g. '88231'"
+        )
     return '{"order": "#88231", "status": "in transit", "eta": "2 days"}'
 
 
