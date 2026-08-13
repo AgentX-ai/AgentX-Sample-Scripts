@@ -48,6 +48,8 @@ just organized by framework rather than by governance feature.
 | `08_full_governance_story.py` | All of the above, one continuous narrative | Use this one if you only have time to run a single script live. |
 | `09_agent_registration.py` | How an "agent" ends up in Overview's agent table in the first place | "No signup step for agents, either -- the name you trace under *is* its identity, everywhere." |
 | `10_session_coherence_and_tool_improvement.py` | Session-level coherence judging over a real multi-turn session (real traced LLM calls + a genuinely failing tool call, scripted replies), plus tool-schema and prompt improvement fed by that same session's evidence | "Every individual reply looked fine; the conversation as a whole fell apart. AgentX catches that too, and turns it into concrete rewrites of both the prompt and the tool definition." |
+| `11_feedback_calibration_and_judge_tuning.py` | End-user votes + outcome reports contradicting the judge, per-evaluator calibration (missed vs over-flagged), a criteria rewrite generated from the disagreements, and exact-re-judging validation | "The judge gets judged: real-world signals measure it against reality, and its own criteria improve from the disagreements - with mathematical proof before anything publishes." |
+| `12_ci_gate.py` | Two runs of a golden dataset gated CI-style: baseline passes the rating floor, the regressed "PR" fails both the floor and no-regression, and both land in the CI Gates history | "One line in CI - sys.exit(gate.exit_code) - blocks the merge when eval quality drops, with the verdict on record." |
 
 ### Notes
 
