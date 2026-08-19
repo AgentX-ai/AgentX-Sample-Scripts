@@ -37,9 +37,11 @@ else:
     if health.status_code != 200:
         fail(f"Engine responded but not healthy (status {health.status_code}).")
 
-bootstrap = requests.get(f"{BASE_URL}/dev/bootstrap", timeout=5)
-bootstrap.raise_for_status()
-api_key = bootstrap.json()["apiKey"]
+api_key = os.getenv("AGENTX_API_KEY")
+if not api_key:
+    raise SystemExit(
+        "Set AGENTX_API_KEY - copy the 'Default project API key' the engine prints at startup."
+    )
 
 headers = {"x-api-key": api_key}
 prompts = requests.get(f"{BASE_URL}/evaluate/prompts", headers=headers, timeout=5).json()

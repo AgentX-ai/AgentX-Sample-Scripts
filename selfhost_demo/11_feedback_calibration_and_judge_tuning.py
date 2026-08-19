@@ -31,9 +31,12 @@ PUBLISH = False  # set True to actually publish the tuned criteria at the end
 
 
 def local_api_key() -> str:
-    resp = requests.get(f"{BASE_URL}/dev/bootstrap", timeout=5)
-    resp.raise_for_status()
-    return resp.json()["apiKey"]
+    key = os.getenv("AGENTX_API_KEY")
+    if not key:
+        raise SystemExit(
+            "Set AGENTX_API_KEY - copy the 'Default project API key' the engine prints at startup."
+        )
+    return key
 
 
 API_KEY = local_api_key()
