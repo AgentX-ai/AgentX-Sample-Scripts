@@ -97,7 +97,17 @@ def retrieve(query: str) -> list:
 def rag_agent(case):
     chunks = retrieve(case.query)
     answer = f"Based on our policy: {chunks[0][:80]}..."
-    return {"output": answer, "retrieval_context": chunks}
+    # Trace the case so the result links its trace (View Trace in the run detail table);
+    # sync=True populates span.trace_id before the block exits, monitor=False skips
+    # online checks for this eval-run traffic.
+    with client.tracer.trace(
+        "rag-retriever-regression", input={"query": case.query}, sync=True, monitor=False
+    ) as span:
+        with client.tracer.trace_retrieval("kb_search", query=case.query) as r:
+            r.output = chunks
+            r.doc_count = len(chunks)
+        span.output = answer
+    return {"output": answer, "retrieval_context": chunks, "trace_id": span.trace_id}
 
 
 run = (
