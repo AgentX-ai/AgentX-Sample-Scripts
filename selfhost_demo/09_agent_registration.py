@@ -28,7 +28,6 @@ the exact endpoint Overview's agent table calls.
 
 import os
 
-import requests
 from dotenv import load_dotenv
 from agentx import AgentX
 
@@ -47,15 +46,11 @@ def local_api_key() -> str:
 
 
 API_KEY = local_api_key()
-HEADERS = {"x-api-key": API_KEY}
 client = AgentX(api_key=API_KEY, base_url=BASE_URL)
 
 
 def agent_names() -> list[str]:
-    """Same endpoint Overview's agent table itself polls -- no SDK method for it, dashboard-only read."""
-    resp = requests.get(f"{BASE_URL}/agent-monitoring/agents", headers=HEADERS, timeout=5)
-    resp.raise_for_status()
-    return [a["name"] for a in resp.json()["agents"]]
+    return [a["name"] for a in client.monitor.agents.list()]
 
 
 # Unique per run so this script can be re-run against a non-fresh install without "already exists"

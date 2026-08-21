@@ -35,7 +35,6 @@ import json
 import os
 from typing import Any, Dict
 
-import requests
 from dotenv import load_dotenv
 from openai import OpenAI
 from agentx import AgentX
@@ -58,7 +57,6 @@ def local_api_key() -> str:
 
 
 API_KEY = local_api_key()
-HEADERS = {"x-api-key": API_KEY}
 
 client = AgentX(api_key=API_KEY, base_url=BASE_URL)
 oai = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -212,21 +210,20 @@ def support_agent(case: EvaluationCase) -> Dict[str, Any]:
 # precedence over the dataset's own value once evaluation_settings_id is passed to .run() below, so
 # this is what actually controls repetitions per question, not the builder call above.
 #
-# codeScorers has no builder kwarg yet (see module docstring), so this uses the same POST
-# .builder(...).publish() would make, plus that one extra field, rather than mixing SDK and raw
-# REST calls for one config. "conciseness" below is the kind of check that's awkward to express as
-# a fixed similarity metric or an LLM judge rubric, but trivial as a few lines of code: a hard
-# word-count cutoff, checked exactly the same way on every run.
-evaluation_settings_payload = {
-    "name": "Support Agent Strict Grading",
-    "numberOfRequests": 2,
-    "acceptanceCriteria": "Accurate, concise, grounded in the stated policy.",
-    "rejectionCriteria": "Dismissive, ignores the question, or invents a policy.",
-    "vectorSimilarity": {"enabled": True},
-    "jaccardSimilarity": {"enabled": True},
-    "bleuScore": {"enabled": True},
-    "rougeScore": {"enabled": True},
-    "codeScorers": [
+# code_scorers: sandboxed JS run per result alongside the LLM judge and similarity metrics.
+# "conciseness" below is the kind of check that's awkward to express as a similarity metric or a
+# judge rubric, but trivial as a few lines of code: a hard word-count cutoff, checked exactly the
+# same way on every run.
+evaluation_settings = client.evaluations.settings.builder(
+    name="Support Agent Strict Grading",
+    number_of_requests=2,
+    acceptance_criteria="Accurate, concise, grounded in the stated policy.",
+    rejection_criteria="Dismissive, ignores the question, or invents a policy.",
+    vector_similarity=True,
+    jaccard_similarity=True,
+    bleu_score=True,
+    rouge_score=True,
+    code_scorers=[
         {
             "name": "conciseness",
             "enabled": True,
@@ -239,22 +236,12 @@ evaluation_settings_payload = {
             ),
         }
     ],
-}
-evaluation_settings_resp = requests.post(
-    f"{BASE_URL}/custom-agent-evaluations/evaluation-settings",
-    headers=HEADERS,
-    json=evaluation_settings_payload,
-    timeout=10,
-).json()
-evaluation_settings_id = evaluation_settings_resp["_id"]
+).publish()
+evaluation_settings_id = evaluation_settings.id
 print(f"Published grading config: {evaluation_settings_id}")
 
 
 # --- Step 4: run and score --------------------------------------------------------------------
-# run_context.average_rating reads a `liveStatistics` field the hosted SaaS API returns but
-# self-host's engine doesn't populate yet, so it comes back None here even though every result was
-# genuinely scored (self-host's holistic .analyze() report endpoint isn't implemented either, same
-# gap). Pull the per-question ratings directly from the run instead and average them here.
 run_context: EvaluationRunContext = (
     client.evaluations.run(
         dataset_id=dataset.id,
@@ -265,16 +252,14 @@ run_context: EvaluationRunContext = (
     .finalize()
 )
 
-# run_context._run.run_id: no public accessor for the run id exists on EvaluationRunContext yet
-# (only the rating properties above), so this reaches past the public API for it.
-run_detail = requests.get(f"{BASE_URL}/evaluate/{run_context._run.run_id}", headers=HEADERS, timeout=10).json()
-ratings = [r["rating"] for r in run_detail["results"] if r.get("rating") is not None]
+results = run_context.results()
+ratings = [r["rating"] for r in results if r.get("rating") is not None]
 
 print()
 if ratings:
     print(f"Average rating: {sum(ratings) / len(ratings):.2f} / 10  (across {len(ratings)} results)")
     print(f"Range:          {min(ratings):.1f} - {max(ratings):.1f}")
-    for r in run_detail["results"]:
+    for r in results:
         print(f"  [{r['rating']:.0f}/10] {r['questionText']}")
         print(f"          {r['justification']}")
         # The conciseness code scorer runs alongside the LLM judge and similarity metrics, not

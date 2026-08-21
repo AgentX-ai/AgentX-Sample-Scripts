@@ -17,7 +17,6 @@ Set PUBLISH = True to actually publish the proposed rewrite as a new version at 
 import os
 import time
 
-import requests
 from dotenv import load_dotenv
 from openai import OpenAI
 from agentx import AgentX
@@ -41,7 +40,6 @@ def local_api_key() -> str:
 
 
 API_KEY = local_api_key()
-HEADERS = {"x-api-key": API_KEY}
 
 client = AgentX(api_key=API_KEY, base_url=BASE_URL)
 oai = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -170,7 +168,7 @@ time.sleep(6)  # scoring runs asynchronously right after ingest
 
 
 # --- Step 4: pull the merged evidence the judge will see ------------------------------------------
-examples = requests.get(f"{BASE_URL}/evaluate/prompts/{prompt.id}/examples", headers=HEADERS, timeout=10).json()
+examples = client.evaluations.prompts.examples(prompt.id)
 eval_run_count = sum(1 for ex in examples["examples"] if ex["source"] == "eval_run")
 online_eval_count = sum(1 for ex in examples["examples"] if ex["source"] == "online_evaluator")
 print(f"\nEvidence gathered: {examples['exampleCount']} example(s)")
@@ -181,7 +179,7 @@ for ex in examples["examples"][:3]:
 
 
 # --- Step 5: ask the judge to propose a rewrite ----------------------------------------------------
-proposal = requests.post(f"{BASE_URL}/evaluate/prompts/{prompt.id}/propose", headers=HEADERS, timeout=60).json()
+proposal = client.evaluations.prompts.propose(prompt.id)
 print(f"\nProposed rewrite (based on {proposal['sourceBreakdown']['evalRun']} eval-run + "
       f"{proposal['sourceBreakdown']['onlineEvaluator']} online-evaluator example(s)):")
 print(f"\n  {proposal['revisedText']}")
@@ -190,12 +188,12 @@ print(f"\nReasoning: {proposal['reasoning']}")
 
 # --- Step 6: publish (or don't) -------------------------------------------------------------------
 if PUBLISH:
-    published = requests.post(
-        f"{BASE_URL}/evaluate/prompts/{prompt.id}/versions",
-        headers=HEADERS,
-        json={"text": proposal["revisedText"], "source": "proposed", "reasoning": proposal["reasoning"], "basedOnVersion": prompt.version},
-        timeout=10,
-    ).json()
+    published = client.evaluations.prompts.publish_version(
+        prompt.id,
+        text=proposal["revisedText"],
+        reasoning=proposal["reasoning"],
+        based_on_version=prompt.version,
+    )
     print(f"\nPublished as v{published['currentVersion']}.")
 else:
     print(

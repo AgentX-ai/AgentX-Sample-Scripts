@@ -28,7 +28,6 @@ Set PUBLISH = True to actually publish both proposed rewrites at the end.
 import os
 import time
 
-import requests
 from dotenv import load_dotenv
 from openai import OpenAI
 from agentx import AgentX
@@ -52,7 +51,6 @@ def local_api_key() -> str:
 
 
 API_KEY = local_api_key()
-HEADERS = {"x-api-key": API_KEY}
 
 client = AgentX(api_key=API_KEY, base_url=BASE_URL)
 oai = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -75,16 +73,8 @@ VAGUE_TOOL_DEFINITION = (
 # --- Step 1: an agent with monitoring enabled (get-or-create, safe to re-run) --------------------
 # Monitoring is what turns the failed tool call into an agent-tool-failure event (the tool loop's
 # evidence) and what lets the online evaluator score each turn (the prompt loop's evidence).
-existing_agents = requests.get(f"{BASE_URL}/agents", headers=HEADERS, timeout=5).json()["agents"]
-agent = next((a for a in existing_agents if a["name"] == AGENT_NAME), None)
-if agent is None:
-    agent = requests.post(f"{BASE_URL}/agents", headers=HEADERS, json={"name": AGENT_NAME}, timeout=5).json()["agent"]
-requests.put(
-    f"{BASE_URL}/agent-monitoring/profiles/{agent['_id']}",
-    headers=HEADERS,
-    json={"enabled": True, "coverageMode": "all", "sampleRate": 1},
-    timeout=5,
-).raise_for_status()
+agent = client.monitor.agents.ensure(AGENT_NAME)
+client.monitor.update_profile(agent["_id"], {"enabled": True, "coverageMode": "all", "sampleRate": 1})
 print(f"Agent ready with monitoring enabled: {AGENT_NAME} ({agent['_id']})")
 
 
@@ -96,29 +86,17 @@ except AgentXEvaluationsError:
     prompt = client.evaluations.prompts.create(name=PROMPT_NAME, text=WEAK_PROMPT_TEXT)
     print(f"Created prompt: {prompt.name} v{prompt.version}")
 
-tool_schemas = requests.get(f"{BASE_URL}/evaluate/tool-schemas", headers=HEADERS, timeout=5).json()["toolSchemas"]
-tool_schema = next((t for t in tool_schemas if t["name"] == TOOL_NAME), None)
-if tool_schema is None:
-    tool_schema = requests.post(
-        f"{BASE_URL}/evaluate/tool-schemas",
-        headers=HEADERS,
-        json={
-            "name": TOOL_NAME,
-            "description": "Order lookup for the demo support agent",
-            "definition": VAGUE_TOOL_DEFINITION,
-        },
-        timeout=5,
-    ).json()
-    print(f"Registered tool schema: {TOOL_NAME} v{tool_schema['currentVersion']}")
-else:
-    print(f"Using existing tool schema: {TOOL_NAME} v{tool_schema['currentVersion']}")
+tool_schema = client.evaluations.tool_schemas.get_or_create(
+    name=TOOL_NAME,
+    description="Order lookup for the demo support agent",
+    definition=VAGUE_TOOL_DEFINITION,
+)
+print(f"Tool schema ready: {TOOL_NAME} v{tool_schema['currentVersion']}")
 
 
 # --- Step 3: an online evaluator scoring this agent's live traffic (get-or-create) ---------------
-evaluators = requests.get(f"{BASE_URL}/agent-monitoring/online-evaluators", headers=HEADERS, timeout=5).json()[
-    "evaluators"
-]
-evaluator = next((e for e in evaluators if e["name"] == "Session Demo Quality Bar"), None)
+evaluators = client.monitor.online_evaluators.list()
+evaluator = next((e for e in evaluators if e.name == "Session Demo Quality Bar"), None)
 if evaluator is None:
     settings = client.evaluations.settings.builder(
         name="Session Demo Quality Bar Config",
@@ -250,21 +228,19 @@ time.sleep(10)
 # --- Step 5: session-level coherence check -------------------------------------------------------
 # One judge call over the assembled session. Same thing the dashboard's "Check coherence" button
 # does on the trace detail's span-tree panel.
-coherence_resp = requests.post(
-    f"{BASE_URL}/agent-monitoring/sessions/{SESSION_ID}/coherence-check", headers=HEADERS, timeout=120
-)
-if coherence_resp.status_code != 201:
+try:
+    score = client.monitor.sessions.coherence_check(SESSION_ID)
+except Exception as exc:
     raise SystemExit(
-        f"Coherence check failed ({coherence_resp.status_code}): {coherence_resp.json().get('error')}\n"
+        f"Coherence check failed: {exc}\n"
         "The engine needs a judge key (OPENAI_API_KEY env var, or Platform Settings > LLM Providers)."
     )
-score = coherence_resp.json()["score"]
 print(f"\nSession coherence: {score['rating']}/10 across {score['spanCount']} spans")
 print(f"  {score['justification']}")
 if score["driftSpanId"]:
     # driftSpanId can be any span in the session (a turn's LLM/tool child, not just the turn root
     # itself) - walk it up to its root to name the turn it belongs to.
-    spans = requests.get(f"{BASE_URL}/ingest/sessions/{SESSION_ID}/spans", headers=HEADERS, timeout=10).json()["spans"]
+    spans = client.monitor.sessions.spans(SESSION_ID)
     by_span_id = {s.get("spanId"): s for s in spans if s.get("spanId")}
     drift = next((s for s in spans if s["_id"] == score["driftSpanId"]), None)
     while drift and drift.get("parentSpanId"):
@@ -275,61 +251,45 @@ if score["driftSpanId"]:
 
 
 # --- Step 6: tool improvement from the failed call -----------------------------------------------
-examples = requests.get(
-    f"{BASE_URL}/evaluate/tool-schemas/{tool_schema['_id']}/examples", headers=HEADERS, params={"window": "24h"}, timeout=10
-).json()
+examples = client.evaluations.tool_schemas.examples(tool_schema["_id"], window="24h")
 print(f"\nTool evidence for {TOOL_NAME}: {len(examples['examples'])} example(s)")
 for ex in examples["examples"][:3]:
     print(f"  [{ex['source']}] {ex['detail']}")
 
-tool_proposal = requests.post(
-    f"{BASE_URL}/evaluate/tool-schemas/{tool_schema['_id']}/propose", headers=HEADERS, json={"window": "24h"}, timeout=120
-).json()
+tool_proposal = client.evaluations.tool_schemas.propose(tool_schema["_id"], window="24h")
 if tool_proposal.get("proposal"):
     p = tool_proposal["proposal"]
     print(f"Proposed tool definition rewrite (from {tool_proposal['exampleCount']} example(s)):")
     for change in p["changes"]:
         print(f"  [{change['tag']}] {change['text']}")
     if PUBLISH:
-        published = requests.post(
-            f"{BASE_URL}/evaluate/tool-schemas/{tool_schema['_id']}/versions",
-            headers=HEADERS,
-            json={
-                "definition": p["definition"],
-                "source": "proposed",
-                "reasoning": p["reasoning"],
-                "basedOnVersion": p["basedOnVersion"],
-            },
-            timeout=10,
-        ).json()
+        published = client.evaluations.tool_schemas.publish_version(
+            tool_schema["_id"],
+            definition=p["definition"],
+            reasoning=p["reasoning"],
+            based_on_version=p["basedOnVersion"],
+        )
         print(f"Published tool schema v{published['currentVersion']}.")
 else:
     print(f"No tool proposal: {tool_proposal.get('message') or tool_proposal.get('error')}")
 
 
 # --- Step 7: prompt improvement from the same session's scored traffic ---------------------------
-prompt_examples = requests.get(f"{BASE_URL}/evaluate/prompts/{prompt.id}/examples", headers=HEADERS, timeout=10).json()
+prompt_examples = client.evaluations.prompts.examples(prompt.id)
 online_count = sum(1 for ex in prompt_examples["examples"] if ex["source"] == "online_evaluator")
 print(f"\nPrompt evidence for {PROMPT_NAME}: {prompt_examples['exampleCount']} example(s) ({online_count} from this session's scored traffic)")
 
 if prompt_examples["exampleCount"] > 0:
-    prompt_proposal = requests.post(
-        f"{BASE_URL}/evaluate/prompts/{prompt.id}/propose", headers=HEADERS, timeout=120
-    ).json()
+    prompt_proposal = client.evaluations.prompts.propose(prompt.id)
     print("Proposed prompt rewrite:")
     print(f"  {prompt_proposal['revisedText']}")
     if PUBLISH:
-        published = requests.post(
-            f"{BASE_URL}/evaluate/prompts/{prompt.id}/versions",
-            headers=HEADERS,
-            json={
-                "text": prompt_proposal["revisedText"],
-                "source": "proposed",
-                "reasoning": prompt_proposal["reasoning"],
-                "basedOnVersion": prompt.version,
-            },
-            timeout=10,
-        ).json()
+        published = client.evaluations.prompts.publish_version(
+            prompt.id,
+            text=prompt_proposal["revisedText"],
+            reasoning=prompt_proposal["reasoning"],
+            based_on_version=prompt.version,
+        )
         print(f"Published prompt v{published['currentVersion']}.")
 else:
     print(

@@ -11,7 +11,6 @@ code/tools), explicit and per-trace, never automatic. No dedicated SDK method ex
 
 import os
 
-import requests
 from dotenv import load_dotenv
 from openai import OpenAI
 from agentx import AgentX
@@ -32,7 +31,6 @@ def local_api_key() -> str:
 
 
 API_KEY = local_api_key()
-HEADERS = {"x-api-key": API_KEY}
 
 client = AgentX(api_key=API_KEY, base_url=BASE_URL)
 oai = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -70,18 +68,16 @@ print(f"trace_id: {span.trace_id}")
 # boot. gpt-4o-mini and claude-haiku-4-5 are both meaningfully cheaper than gpt-4o.
 candidates = ["gpt-4o-mini", "claude-haiku-4-5"]
 
-result = requests.post(
-    f"{BASE_URL}/agent-monitoring/traces/{span.trace_id}/portability",
-    headers=HEADERS,
-    json={"modelIds": candidates},
-    timeout=60,
-).json()
+result = client.monitor.run_model_portability(span.trace_id, candidates)
 
 print(f"\n{'model':<20} {'rating':>8} {'cost ($)':>10} {'latency (ms)':>14}  output")
 for r in result["results"]:
     tag = "baseline" if r["isBaseline"] else "candidate"
     cost = f"{r['estimatedCostUSD']:.5f}" if r["estimatedCostUSD"] is not None else "n/a"
-    print(f"{r['model']:<20} {r['rating']:>8} {cost:>10} {str(r['latencyMs']):>14}  {(r['outputText'] or '')[:70]!r}  [{tag}]")
+    # rating/output are None when that candidate's provider key isn't configured on the
+    # engine (each candidate needs its own provider key for the replay + judging).
+    rating = r["rating"] if r["rating"] is not None else "n/a"
+    print(f"{r['model']:<20} {rating!s:>8} {cost:>10} {str(r['latencyMs']):>14}  {(r['outputText'] or r.get('error') or '')[:70]!r}  [{tag}]")
 
 print(
     "\nSame idea works across any trace already in the system, not just ones sent moments ago, "

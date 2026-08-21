@@ -16,7 +16,6 @@ import json
 import os
 import time
 
-import requests
 from dotenv import load_dotenv
 from openai import OpenAI
 from agentx import AgentX
@@ -218,11 +217,9 @@ run_context = client.evaluations.run(
     subject={"kind": "custom_agent", "displayName": "Fixed Support Agent", "framework": "openai"},
 ).execute(fixed_agent).finalize()
 
-run_detail = requests.get(
-    f"{BASE_URL}/evaluate/{run_context._run.run_id}", headers={"x-api-key": local_api_key()}, timeout=10
-).json()
-for r in run_detail["results"]:
-    print(f"  [{r['rating']:.0f}/10] {r['questionText']} -> {r['responseMessage'][:80]!r}")
+for r in run_context.results():
+    output_text = (r.get("output") or {}).get("text", "") if isinstance(r.get("output"), dict) else ""
+    print(f"  [{r['rating']:.0f}/10] {r['questionText']} -> {output_text[:80]!r}")
 
 print(
     "\nFrom here: 04 shows this same quality bar applied continuously to live traffic (not just "

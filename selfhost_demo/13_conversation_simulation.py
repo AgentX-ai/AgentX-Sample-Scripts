@@ -19,8 +19,9 @@ evaluators, and "Add to dataset" from the session view all work on them.
 
 import os
 
-import requests
 from dotenv import load_dotenv
+
+from agentx import AgentX
 
 load_dotenv()
 
@@ -36,7 +37,8 @@ def local_api_key() -> str:
     return key
 
 
-HEADERS = {"x-api-key": local_api_key()}
+client = AgentX(api_key=local_api_key(), base_url=BASE_URL)
+
 
 SYSTEM_PROMPT = (
     "You are a support agent for AcmeShop. You can look up orders with the lookup_order tool. "
@@ -78,22 +80,15 @@ SIMULATIONS = [
 
 for sim in SIMULATIONS:
     print(f"\n=== Simulating: {sim['label']} ===")
-    resp = requests.post(
-        f"{BASE_URL}/evaluate/playground/simulate",
-        headers=HEADERS,
-        json={
-            "model": "gpt-4o-mini",
-            "messages": [{"role": "system", "content": SYSTEM_PROMPT}],
-            "persona": sim["persona"],
-            "goal": sim["goal"],
-            "maxTurns": 5,
-            "tools": [LOOKUP_TOOL],
-            "agentName": "sim-demo-support-agent",
-        },
-        timeout=600,
+    result = client.evaluations.simulate_conversation(
+        model="gpt-4o-mini",
+        system_prompt=SYSTEM_PROMPT,
+        persona=sim["persona"],
+        goal=sim["goal"],
+        max_turns=5,
+        tools=[LOOKUP_TOOL],
+        agent_name="sim-demo-support-agent",
     )
-    resp.raise_for_status()
-    result = resp.json()
 
     print(f"outcome: {result['outcome']}  session: {result['sessionId']}")
     if result.get("outcomeNote"):

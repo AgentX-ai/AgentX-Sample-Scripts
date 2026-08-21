@@ -14,7 +14,6 @@ In a real pipeline the only difference is that `my_agent` imports YOUR code from
 import os
 import time
 
-import requests
 from dotenv import load_dotenv
 from agentx import AgentX
 
@@ -105,9 +104,7 @@ print("In a real workflow this line is simply: sys.exit(gate.exit_code)")
 
 
 # --- Step 4: the gates are on record --------------------------------------------------------
-history = requests.get(
-    f"{BASE_URL}/evaluate/ci/gates", headers={"x-api-key": API_KEY}, timeout=15
-).json()["gates"]
+history = client.evaluations.list_gates()
 ours = [g for g in history if g["caller"] in ("ci-demo-baseline", "ci-demo-pr")][:4]
 print("\nRecorded gate history (dashboard: sidebar > Automations > CI Gates):")
 for g in ours:

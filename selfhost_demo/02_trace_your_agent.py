@@ -123,7 +123,10 @@ TOOLS = [
     },
 ]
 
-TOOL_REGISTRY = {"policy_lookup": policy_lookup, "check_order_status": check_order_status}
+TOOL_REGISTRY = {
+    "policy_lookup": policy_lookup,
+    "check_order_status": check_order_status,
+}
 
 SYSTEM_PROMPT = (
     "You are a helpful, concise customer support agent. Use policy_lookup for policy questions "
@@ -141,7 +144,9 @@ def run_agent_loop(query: str) -> str:
         {"role": "user", "content": query},
     ]
     while True:
-        resp = oai.chat.completions.create(model="gpt-4o-mini", messages=messages, tools=TOOLS)
+        resp = oai.chat.completions.create(
+            model="gpt-4o-mini", messages=messages, tools=TOOLS
+        )
         message = resp.choices[0].message
 
         if not message.tool_calls:
@@ -151,10 +156,14 @@ def run_agent_loop(query: str) -> str:
         for tool_call in message.tool_calls:
             fn = TOOL_REGISTRY[tool_call.function.name]
             args = json.loads(tool_call.function.arguments)
-            with client.tracer.trace_tool_call(tool_call.function.name, input=args) as t:
+            with client.tracer.trace_tool_call(
+                tool_call.function.name, input=args
+            ) as t:
                 result = fn(**args)
                 t.output = result
-            messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": str(result)})
+            messages.append(
+                {"role": "tool", "tool_call_id": tool_call.id, "content": str(result)}
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -196,7 +205,9 @@ try:
     ) as span:
         span.output = run_agent_loop(query_2)
 except ValueError as e:
-    print("\nCall 2 (tool call fails partway through the loop, caught here only to keep the script running):")
+    print(
+        "\nCall 2 (tool call fails partway through the loop, caught here only to keep the script running):"
+    )
     print(f"  error:    {e}")
     print(f"  trace_id: {span.trace_id}")
 

@@ -18,7 +18,6 @@ richest source, since those carry a human rationale).
 import os
 import time
 
-import requests
 from dotenv import load_dotenv
 from openai import OpenAI
 from agentx import AgentX
@@ -40,7 +39,6 @@ def local_api_key() -> str:
 
 
 API_KEY = local_api_key()
-HEADERS = {"x-api-key": API_KEY, "Content-Type": "application/json"}
 client = AgentX(api_key=API_KEY, base_url=BASE_URL)
 oai = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 patch_openai_client(oai, client.tracer)
@@ -130,11 +128,7 @@ print("Agreeing ground truth reported for the other two (the validation control 
 
 
 # --- Step 5: per-evaluator calibration ------------------------------------------------------
-cal = requests.get(
-    f"{BASE_URL}/agent-monitoring/online-evaluators/{evaluator.id}/calibration?window=24h",
-    headers=HEADERS,
-    timeout=30,
-).json()
+cal = client.monitor.online_evaluators.calibration(evaluator.id, window="24h")
 print(
     f"\nCalibration: {cal['agreements']}/{cal['withGroundTruth']} agreement"
     f" | missed: {cal['missed']} (judge passed it, reality said bad)"
@@ -153,14 +147,7 @@ if not cal["disagreementCases"]:
 
 # --- Step 6: rewrite the judge's own criteria from the disagreements ------------------------
 print("\nGenerating a criteria rewrite from the disagreements (one judge call)...")
-tune = requests.post(
-    f"{BASE_URL}/agent-monitoring/online-evaluators/{evaluator.id}/tune",
-    headers=HEADERS,
-    json={"window": "24h"},
-    timeout=180,
-)
-tune.raise_for_status()
-proposal = tune.json()["proposal"]
+proposal = client.monitor.online_evaluators.tune(evaluator.id, window="24h")
 print(f"Reasoning: {proposal['reasoning'][:220]}")
 for change in proposal["changes"][:5]:
     print(f"  [{change['tag']}] {change['text'][:90]}")
@@ -171,26 +158,15 @@ for change in proposal["changes"][:5]:
 # wrong, plus the control cases they got right. Agreement with recorded reality is measured
 # directly - "fixes 2/2, preserves 2/2" is a mathematical claim, not a vibe.
 print("\nValidating: candidate criteria re-judge the disagreements + a control set...")
-validation = requests.post(
-    f"{BASE_URL}/agent-monitoring/online-evaluators/{evaluator.id}/tune/validate",
-    headers=HEADERS,
-    json={k: proposal[k] for k in ("acceptanceCriteria", "rejectionCriteria", "evaluationCriteria")} | {"window": "24h"},
-    timeout=300,
-)
-validation.raise_for_status()
-verdict = validation.json()
+criteria = {k: proposal[k] for k in ("acceptanceCriteria", "rejectionCriteria", "evaluationCriteria")}
+verdict = client.monitor.online_evaluators.validate_tuning(evaluator.id, criteria, window="24h")
 print(f"Verdict: {verdict['verdict'].upper()} (net {verdict['netAgreementGain']:+d})")
 print(verdict["summary"])
 
 
 # --- Step 8: publish (human-gated) ----------------------------------------------------------
 if PUBLISH:
-    requests.post(
-        f"{BASE_URL}/agent-monitoring/online-evaluators/{evaluator.id}/tune/publish",
-        headers=HEADERS,
-        json={k: proposal[k] for k in ("acceptanceCriteria", "rejectionCriteria", "evaluationCriteria")},
-        timeout=30,
-    ).raise_for_status()
+    client.monitor.online_evaluators.publish_tuning(evaluator.id, criteria)
     print("\nPublished: the evaluator's config now carries the tuned criteria (version history keeps the old one).")
 else:
     print("\nPUBLISH=False, nothing was written. In the dashboard: Monitor > Online Evaluators >")

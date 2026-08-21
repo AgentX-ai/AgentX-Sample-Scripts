@@ -60,13 +60,14 @@ just organized by framework rather than by governance feature.
   `02_trace_your_agent.py` explains the pattern in depth; the others reuse the same shape with
   less commentary. `06`'s bad-response trace and part of `08`'s stay scripted on purpose, they're
   standing in for a broken code path a well-prompted model wouldn't reliably reproduce on its own.
-- Online Evaluators are created and managed via `client.monitor.online_evaluators` (real SDK
-  support: builder/get/list/update/delete/ratings/events, same shape as `client.monitor.patterns`).
-  A few other things these scripts demonstrate still don't have a dedicated SDK method (the prompt
-  registry's `/propose` autotune call, model portability, listing registered agents, code-based
-  scorers on a grading config), so those specific calls use `requests` directly against the same
-  REST API the dashboard itself
-  calls. That's called out inline wherever it happens.
+- Every script is pure SDK - no raw REST calls. The full surface these demos exercise:
+  `client.evaluations` (datasets, grading configs with `code_scorers`, runs + `results()`,
+  `list_gates()`, `simulate_conversation()`), `client.evaluations.prompts` (registry +
+  `examples`/`propose`/`publish_version`), `client.evaluations.tool_schemas` (same loop for tool
+  definitions), `client.monitor` (patterns, signals, `online_evaluators` incl.
+  `calibration`/`tune`/`validate_tuning`/`publish_tuning`, `sessions.coherence_check`,
+  `agents`, `run_model_portability`), plus `client.ping()`, `client.feedback`, and
+  `client.outcomes`.
 - **Custom Evaluators** (Governance → Monitor → Custom Evaluators) is a newer, related feature not
   currently demoed by any script here: your own HTTP endpoint gets POSTed a sample of live traffic
   and its `{matches, reason?, score?}` response decides whether a signal is raised, same shape as

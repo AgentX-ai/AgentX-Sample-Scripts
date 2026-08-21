@@ -1,58 +1,55 @@
 """
-Run this first, always. Confirms the self-host engine is up and reachable before you're standing
-in front of an audience relying on it, and prints the info you'll want on screen anyway (dashboard
-URL, local API key, what's already in the database).
+Run this first, always. Confirms the self-host engine is up, the API key is accepted, and
+prints the info you'll want on screen anyway (dashboard URL, what's already in the database).
 
-No AGENTX_API_KEY needed: the local key is generated once on first boot and readable from an
-unauthenticated bootstrap endpoint, the same way the dashboard itself fetches it on load.
+`client.ping()` is the same fail-fast check you'd put at the top of any long-running service:
+one cheap authenticated call that raises AgentXConnectionError (engine unreachable) or
+AgentXAuthError (key rejected) with an actionable message, instead of the SDK's normal lazy
+behavior where a bad URL or key only surfaces once something actually sends.
 """
 
 import os
 
-import requests
 from dotenv import load_dotenv
+
+from agentx import AgentX
+from agentx.exceptions import AgentXConnectionError, AgentXAuthError
 
 load_dotenv()
 
 BASE_URL = os.getenv("AGENTX_SELFHOST_BASE_URL", "http://localhost:4700/api/v1")
-ENGINE_ROOT = BASE_URL.removesuffix("/api/v1")
-
-
-def fail(message: str) -> None:
-    raise SystemExit(
-        f"\n{message}\n\n"
-        f"Start the engine first, e.g.:\n"
-        f"  AGENTX_HOME=/tmp/agentx-demo ./dist/agentx-server --dev\n"
-        f"(or `yarn dev` from AgentX-trace-eval/engine if running from source)\n"
-    )
-
-
-print(f"Checking {BASE_URL} ...")
-
-try:
-    health = requests.get(f"{ENGINE_ROOT}/health", timeout=5)
-except requests.exceptions.ConnectionError:
-    fail(f"Can't reach the engine at {ENGINE_ROOT}.")
-else:
-    if health.status_code != 200:
-        fail(f"Engine responded but not healthy (status {health.status_code}).")
 
 api_key = os.getenv("AGENTX_API_KEY")
 if not api_key:
     raise SystemExit(
-        "Set AGENTX_API_KEY - copy the 'Default project API key' the engine prints at startup."
+        "Set AGENTX_API_KEY - copy the 'Default project API key' the engine prints at startup "
+        "(for Docker: docker logs <container> | grep 'API key')."
     )
 
-headers = {"x-api-key": api_key}
-prompts = requests.get(f"{BASE_URL}/evaluate/prompts", headers=headers, timeout=5).json()
-datasets = requests.get(f"{BASE_URL}/evaluate/evaluationSettings", headers=headers, timeout=5).json()
+client = AgentX(api_key=api_key, base_url=BASE_URL)
 
-print("\nEngine is up.")
+print(f"Checking {BASE_URL} ...")
+try:
+    client.ping()
+except AgentXConnectionError as exc:
+    raise SystemExit(
+        f"\n{exc}\n\n"
+        "Start the engine first, e.g.:\n"
+        "  AGENTX_HOME=/tmp/agentx-demo ./dist/agentx-server --dev\n"
+        "(or `yarn dev` from AgentX-trace-eval/engine if running from source)\n"
+    )
+except AgentXAuthError as exc:
+    raise SystemExit(f"\n{exc}")
+
+prompts = client.evaluations.prompts.list()
+configs = client.evaluations.settings.list()
+
+print("\nEngine is up and the key is accepted.")
 print(f"  Base URL:       {BASE_URL}")
 print(f"  Local API key:  {api_key}")
-print(f"  Dashboard:      {ENGINE_ROOT} (if started with --dev, it should already be open)")
-print(f"  Prompts:        {len(prompts.get('prompts', []))} registered")
-print(f"  Datasets/configs: {len(datasets.get('evaluationSettings', []))} present")
+print(f"  Dashboard:      {BASE_URL.removesuffix('/api/v1')} (if started with --dev, it should already be open)")
+print(f"  Prompts:        {len(prompts)} registered")
+print(f"  Grading configs: {len(configs)} present")
 print(
     "\nIf those counts look higher than expected, this isn't a fresh install, either that's "
     "fine for this demo, or restart with a clean AGENTX_HOME (see this folder's README)."
