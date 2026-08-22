@@ -1,0 +1,65 @@
+dataset: peFH0LjhNPT5OFrtwcu1f
+
+=== healthy build (expect exit 0) ===
+────────────────────────────────────────────────────────────
+  AgentX Evaluation   -   Buyer Gate - Support Policy v1
+────────────────────────────────────────────────────────────
+  Run   : oHhCwC0eGg32gVaBZ6R3Q
+
+Executing  4 questions × 1 run
+  ✓  [1/4] Q1 run #1  What's your return window?  0ms
+  ✓  [2/4] Q2 run #1  Do you ship internationally?  0ms
+  ✓  [3/4] Q3 run #1  How do I cancel my subscription?  0ms
+  ✓  [4/4] Q4 run #1  Can I get an invoice with my company VAT number?  0ms
+  Scoring - AI is rating 4 results...
+  ✓  Scored 4 results
+
+  Finalizing - submitting results...
+  ✓  Finalized
+
+  ✓  [fail-under] Average rating 10 >= floor 7
+  ✓  GATE PASSED
+  buyer-gate-healthy: exit=0 avg_rating=10.00 jaccard_avg=0.65 wall=6.0s cases=4
+=== healthy build again (judge variance probe) ===
+────────────────────────────────────────────────────────────
+  AgentX Evaluation   -   Buyer Gate - Support Policy v1
+────────────────────────────────────────────────────────────
+  Run   : h9nxepSWsUdDKCa34bGze
+
+Executing  4 questions × 1 run
+  ✓  [1/4] Q1 run #1  What's your return window?  0ms
+  ✓  [2/4] Q2 run #1  Do you ship internationally?  0ms
+  ✓  [3/4] Q3 run #1  How do I cancel my subscription?  0ms
+  ✓  [4/4] Q4 run #1  Can I get an invoice with my company VAT number?  0ms
+  Scoring - AI is rating 4 results...
+  ✓  Scored 4 results
+
+  Finalizing - submitting results...
+  ✓  Finalized
+
+  ✓  [fail-under] Average rating 10 >= floor 7
+  ✓  GATE PASSED
+  buyer-gate-healthy-2: exit=0 avg_rating=10.00 jaccard_avg=0.65 wall=6.9s cases=4
+=== regressed build (expect exit 1) ===
+────────────────────────────────────────────────────────────
+  AgentX Evaluation   -   Buyer Gate - Support Policy v1
+────────────────────────────────────────────────────────────
+  Run   : lwO-No1m0aslvWctUAyQ5
+
+Executing  4 questions × 1 run
+  ✓  [1/4] Q1 run #1  What's your return window?  0ms
+  ✓  [2/4] Q2 run #1  Do you ship internationally?  0ms
+  ✓  [3/4] Q3 run #1  How do I cancel my subscription?  0ms
+  ✓  [4/4] Q4 run #1  Can I get an invoice with my company VAT number?  0ms
+  Scoring - AI is rating 4 results...
+  ✓  Scored 4 results
+
+  Finalizing - submitting results...
+  ✓  Finalized
+
+  ✗  [fail-under] Average rating 0.5 < floor 7
+  ✗  GATE FAILED
+  buyer-gate-regressed: exit=1 avg_rating=0.50 jaccard_avg=0.00 wall=8.3s cases=4
+
+judge variance across identical runs: 0.00 rating points
+UC2 PASS
