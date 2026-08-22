@@ -13,17 +13,15 @@ isolation; only a session-level judge can flag it. Requires the ENGINE to have a
 import os
 import time
 
-import requests
 from dotenv import load_dotenv
 from agentx import AgentX
 
 load_dotenv()
 
 BASE_URL = os.getenv("AGENTX_SELFHOST_BASE_URL", "http://localhost:4791/api/v1")
-boot = requests.post(f"{BASE_URL}/projects", json={"name": f"UC6 sessions {int(time.time())}"}, timeout=15)
-boot.raise_for_status()
-KEY = boot.json()["project"]["apiKey"]
-client = AgentX(api_key=KEY, base_url=BASE_URL)
+bootstrap = AgentX(api_key=os.environ.get("AGENTX_API_KEY", ""), base_url=BASE_URL)
+project = bootstrap.projects.create(f"UC6 sessions {int(time.time())}")
+client = AgentX(api_key=project["apiKey"], base_url=BASE_URL)
 client.ping()
 
 SESSION = f"buyer-session-{int(time.time())}"

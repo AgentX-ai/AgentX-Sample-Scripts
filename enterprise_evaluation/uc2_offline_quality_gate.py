@@ -74,9 +74,9 @@ def gated_run(agent, caller):
     )
     gate = run.gate(fail_under=7, caller=caller)
     elapsed = time.time() - t0
-    results = run.results()  # dict rows, same shape the dashboard's run detail table reads
-    ratings = [r["rating"] for r in results if r.get("rating") is not None]
-    jaccards = [r["jaccardSimilarity"] for r in results if r.get("jaccardSimilarity") is not None]
+    results = run.results()  # typed RunResultRow objects (P1.5)
+    ratings = [r.rating for r in results if r.rating is not None]
+    jaccards = [r.jaccard_similarity for r in results if r.jaccard_similarity is not None]
     avg = sum(ratings) / len(ratings) if ratings else None
     jac = sum(jaccards) / len(jaccards) if jaccards else float("nan")
     print(f"  {caller}: exit={gate.exit_code} avg_rating={avg:.2f} "

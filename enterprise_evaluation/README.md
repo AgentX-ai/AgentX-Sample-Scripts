@@ -55,5 +55,7 @@ bash uc7_operations.sh  # ops probes (auth modes, isolation, limits) - curl-base
 | `uc7_operations.sh` | Ops surface: auth modes, project isolation, rate limits, ingest throughput |
 | `FINDINGS.md` | Raw chronological findings log (bugs, gaps, friction, praise) |
 | `REPORT.md` | The final buyer report: rubric, scores, comparison, recommendation |
+| `DEVELOPMENT_PLAN.md` | The improvement plan derived from the report (infrastructure focus) |
+| `EXECUTION_LOG.md` | Per-phase execution record with acceptance evidence |
 
 Conducted 2026-08-22 against engine commit `2a229d6` (self-host), SDK at repo head.

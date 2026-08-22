@@ -14,17 +14,15 @@ chunk. Refund retrieval is correct. Expected: high context score on refund, ~0 o
 import os
 import time
 
-import requests
 from dotenv import load_dotenv
 from agentx import AgentX
 
 load_dotenv()
 
 BASE_URL = os.getenv("AGENTX_SELFHOST_BASE_URL", "http://localhost:4791/api/v1")
-boot = requests.post(f"{BASE_URL}/projects", json={"name": f"UC5 rag {int(time.time())}"}, timeout=15)
-boot.raise_for_status()
-KEY = boot.json()["project"]["apiKey"]
-client = AgentX(api_key=KEY, base_url=BASE_URL)
+bootstrap = AgentX(api_key=os.environ.get("AGENTX_API_KEY", ""), base_url=BASE_URL)
+project = bootstrap.projects.create(f"UC5 rag {int(time.time())}")
+client = AgentX(api_key=project["apiKey"], base_url=BASE_URL)
 client.ping()
 
 REFUND = "Refund policy: refunds within 30 days of delivery for unused items; shipping fees non-refundable."
@@ -65,14 +63,13 @@ run = (
     .finalize()
 )
 
-detail = requests.get(f"{BASE_URL}/evaluate/{run.run_id}", headers={"x-api-key": KEY}, timeout=15).json()
 scores = {}
 traces_linked = 0
-for result in detail.get("results", []):
-    q = result.get("questionText", "")
-    if result.get("traceId"):
+for result in run.results():  # typed rows (P1.5) - no raw REST needed anymore
+    q = result.question_text or ""
+    if result.trace_id:
         traces_linked += 1
-    for scorer in result.get("codeScorerResults") or []:
+    for scorer in result.code_scorer_results or []:
         if "context" in (scorer.get("name") or "").lower():
             scores[q[:20]] = scorer.get("score")
             print(f"  {q[:45]:45s} context-match={scorer.get('score')}")
