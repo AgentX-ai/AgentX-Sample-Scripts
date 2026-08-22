@@ -19,23 +19,14 @@ load_dotenv()
 
 BASE_URL = os.getenv("AGENTX_SELFHOST_BASE_URL", "http://localhost:4791/api/v1")
 
-import requests  # noqa: E402  (FINDING: projects, template-scorer enable + code-scorer CRUD have no SDK surface)
-
-# Idempotent by construction: every run gets its own project (fresh scorer config, fresh KPIs).
-boot = requests.post(f"{BASE_URL}/projects", json={"name": f"UC3 online {int(time.time())}"},
-                     headers={"Content-Type": "application/json"}, timeout=15)
-boot.raise_for_status()
-PROJECT_KEY = boot.json()["project"]["apiKey"]
-HEADERS = {"x-api-key": PROJECT_KEY, "Content-Type": "application/json"}
-
-client = AgentX(api_key=PROJECT_KEY, base_url=BASE_URL)
+# P1 acceptance: this script is now pure SDK - zero `import requests`. Projects, template-scorer
+# enablement, code-scorer CRUD and event history all have first-class surfaces
+# (client.projects, client.monitor.scorers). Idempotent by construction: every run gets its own
+# project (fresh scorer config, fresh KPIs).
+bootstrap = AgentX(api_key=os.environ.get("AGENTX_API_KEY", ""), base_url=BASE_URL)
+project = bootstrap.projects.create(f"UC3 online {int(time.time())}")
+client = AgentX(api_key=project["apiKey"], base_url=BASE_URL)
 client.ping()
-
-
-def api(method, path, **kwargs):
-    r = requests.request(method, f"{BASE_URL}{path}", headers=HEADERS, timeout=15, **kwargs)
-    r.raise_for_status()
-    return r.json() if r.text else {}
 
 
 # --- 1. Opt-in proof: trippy traffic with everything off -------------------------------------
@@ -45,24 +36,22 @@ time.sleep(1.5)
 before = client.monitor.signals.list(limit=100)
 print(f"signals with zero scorers enabled: {len([s for s in before if s.pattern_key != 'healthy-response'])} (expect 0)")
 
-# --- 2. Enable two template scorers + create a code scorer -----------------------------------
-api("PUT", "/agent-monitoring/settings/monitoring-defaults",
-    json={"enabledBuiltinPatterns": ["secrets-in-response", "pii-in-response"]})
+# --- 2. Enable two template scorers + create a code scorer (pure SDK) ------------------------
+client.monitor.scorers.enable(["secrets-in-response", "pii-in-response"])
 
-scorer = api("POST", "/agent-monitoring/custom-evaluators", json={
-    "name": "Apology overload",
-    "kind": "code",
-    "language": "python",
-    "sampleRate": 1,
-    "alertBelow": 0.5,
-    "script": (
+scorer = client.monitor.scorers.create_code(
+    "Apology overload",
+    (
         "async def handler(input, output, expected, metadata, trace):\n"
         "    text = str(output).lower()\n"
         "    apologies = sum(text.count(w) for w in ('sorry', 'apolog'))\n"
         "    return {'name': 'apology overload', 'score': 0.0 if apologies >= 2 else 1.0,\n"
         "            'metadata': {'apologies': apologies}}\n"
     ),
-})["evaluator"]
+    language="python",
+    sample_rate=1,
+    alert_below=0.5,
+)
 print(f"code scorer created: {scorer['_id']} kind={scorer['kind']}")
 
 # --- 3. Production-like traffic: mostly clean, a few violations ------------------------------
@@ -99,15 +88,16 @@ kpis = client.monitor.kpis(window="24h")
 print(f"KPIs: totalRuns={kpis['totalRuns']} failureRate={kpis['failureRate']:.2f} "
       f"scorerFailing={kpis['breakdown']['scorerFailingRuns']}")
 
-events = api("GET", f"/agent-monitoring/custom-evaluators/{scorer['_id']}/events?window=24h")["events"]
+events = client.monitor.scorers.events(scorer["_id"], window="24h")
 scored = [e for e in events if e.get("score") is not None]
 print(f"code scorer event history: {len(scored)} scored checks (metadata retained: "
       f"{'apologies' in str(events)})")
 
-# Metric semantics (verified, logged in FINDINGS): pattern detections classify the RUN (3 leak
-# traces -> scorerFailingRuns 3), but code/external scorer verdicts are evaluator events - they
-# raise signals and keep their own history, without reclassifying the run outcome. Same design
-# as LLM-judge scores.
+# Metric semantics, per the documented contract (developers.agentx.so/monitor/scorers,
+# "What moves which metric"): pattern detections classify the RUN (3 leak traces ->
+# scorerFailingRuns 3); code/external scorer verdicts are evaluator events - signals + per-scorer
+# history, no run reclassification. Same design as LLM-judge scores. (P0.2: was undocumented
+# when this suite was first written; verified against the docs table now.)
 ok = (
     len([s for s in before if s.pattern_key != "healthy-response"]) == 0
     and len(secrets) == 1 and secrets[0].occurrence_count == 3

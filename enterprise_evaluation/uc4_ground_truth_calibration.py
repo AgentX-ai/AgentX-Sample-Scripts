@@ -19,16 +19,15 @@ load_dotenv()
 
 BASE_URL = os.getenv("AGENTX_SELFHOST_BASE_URL", "http://localhost:4791/api/v1")
 
-boot = requests.post(f"{BASE_URL}/projects", json={"name": f"UC4 calibration {int(time.time())}"}, timeout=15)
-boot.raise_for_status()
-KEY = boot.json()["project"]["apiKey"]
+bootstrap = AgentX(api_key=os.environ.get("AGENTX_API_KEY", ""), base_url=BASE_URL)
+project = bootstrap.projects.create(f"UC4 calibration {int(time.time())}")
+KEY = project["apiKey"]
 HEADERS = {"x-api-key": KEY, "Content-Type": "application/json"}
 client = AgentX(api_key=KEY, base_url=BASE_URL)
 client.ping()
 
-# PII scorer on: AgentX's "flagged in advance" side of the comparison.
-requests.put(f"{BASE_URL}/agent-monitoring/settings/monitoring-defaults",
-             json={"enabledBuiltinPatterns": ["pii-in-response"]}, headers=HEADERS, timeout=15).raise_for_status()
+# PII scorer on: AgentX's "flagged in advance" side of the comparison (pure SDK, P1.3).
+client.monitor.scorers.enable(["pii-in-response"])
 
 # --- Four traces with known reality ----------------------------------------------------------
 def send(q, out):
@@ -49,6 +48,8 @@ client.outcomes.report(trace_id=flagged_fine, outcome="reviewed_fine", is_negati
 client.outcomes.report(trace_id=healthy_fine, outcome="csat_good", is_negative=False, reported_by="csat-sync")
 
 # --- Calibration read-back -------------------------------------------------------------------
+# (Project-level calibration remains REST-only; per-evaluator calibration IS in the SDK via
+# client.monitor.online_evaluators.calibration - noted for P1 follow-up.)
 cal = requests.get(f"{BASE_URL}/agent-monitoring/calibration?window=24h", headers=HEADERS, timeout=15).json()
 print(f"reported={cal['reportedCount']} compared={cal['comparedCount']} "
       f"agreement={cal['agreementRate']:.2f} FP={cal['falsePositiveRate']:.2f} FN={cal['falseNegativeRate']:.2f}")

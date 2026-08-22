@@ -17,7 +17,7 @@ this plan. UC7.2 now guards against the knob's return.
 
 ---
 
-## P0 - Trust repairs (target: this week)
+## P0 - Trust repairs · **DONE 2026-08-22** (see EXECUTION_LOG.md)
 
 Things that actively mislead an operator. (The redaction placebo - the report's #1 - is already
 resolved by removal; see the scope decision above.)
@@ -40,7 +40,7 @@ resolved by removal; see the scope decision above.)
 
 ---
 
-## P1 - SDK parity (target: next 2 weeks)
+## P1 - SDK parity · **DONE 2026-08-22** (see EXECUTION_LOG.md)
 
 The single biggest scoring penalty (SDK read/admin coverage 2/5). Goal: **UC3 and UC7 rewritten
 with zero `import requests`**.
@@ -75,7 +75,7 @@ paginated. Read-only; the wire shapes already exist on `/ingest/traces`.
 
 ---
 
-## P2 - Enterprise IT checklist (target: next month)
+## P2 - Enterprise IT checklist (target: next month) · PLANNED
 
 The procurement blockers where incumbents win (Report gap #5, comparison table last rows).
 
@@ -111,7 +111,7 @@ The procurement blockers where incumbents win (Report gap #5, comparison table l
 
 ---
 
-## P3 - Competitive bets (target: this quarter)
+## P3 - Competitive bets (target: this quarter) · PLANNED
 
 Where the comparison table says incumbents win on capability, not just checklist.
 

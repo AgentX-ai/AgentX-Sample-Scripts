@@ -26,7 +26,8 @@ client.ping()
 t0 = time.time()
 
 # --- Turn 1: healthy tool-using exchange -----------------------------------------------------
-SESSION = f"support-{int(t0)}"
+import uuid  # noqa: E402
+SESSION = f"support-{uuid.uuid4().hex[:10]}"  # collision-proof: back-to-back runs must not share a session
 with client.tracer.trace(
     "buyer-support-agent",
     input={"query": "Where is my order #8812?"},
@@ -54,11 +55,9 @@ with client.tracer.trace(
     root2.set_error("EscalationTimeout: no agents available after 30s")
 turn2 = root2.trace_id
 
-# FINDING (race): child tool spans are sent asynchronously - sync=True only makes the ROOT
-# ingest synchronous. Without this flush, read-back intermittently sees 3 of 4 spans. The SDK
-# provides flush(); the docs don't call out that sync=True doesn't cover children.
-client.tracer.flush(timeout=5.0)
-time.sleep(0.5)
+# RESOLVED (P0.1): sync=True on a root span now drains child spans before returning, so no
+# manual flush is needed - read-after-trace sees the whole tree. (The original finding: children
+# shipped async and read-back intermittently saw 3 of 4 spans.)
 
 # --- Verify what the platform actually captured ----------------------------------------------
 # BUYER NOTE (logged in FINDINGS.md): the SDK has no client.tracer.get_trace(id) read-back -
