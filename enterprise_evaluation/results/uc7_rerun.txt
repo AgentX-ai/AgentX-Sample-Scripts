@@ -1,0 +1,19 @@
+=== 7.1 project isolation ===
+project B sees 0 of project A's traces (expect 0, minus seeds: fresh project has 3 seed traces)
+cross-project leakage of A's content into B: 0 (expect 0)
+
+=== 7.2 no compliance placebos on the settings surface ===
+redaction fields advertised by monitoring defaults: 0 (expect 0 - no placebo knobs)
+
+=== 7.3 ingest throughput (100 sequential root traces) ===
+sequential ingest: p50=1.2ms p95=1.5ms max=7.4ms (~828 req/s single-writer)
+
+=== 7.4 auth-enabled mode (second engine on :4792) ===
+auth config: {"mode":"enabled","needsSetup":true,"socialProviders":[],"emailEnabled":false,"verificationRequired":false}
+anonymous /projects with auth enabled: HTTP 401 (expect 401)
+key handout in enabled mode: 0 (expect 0 - no anonymous credentials)
+
+=== 7.5 credential rate limit (default 120/min, AGENTX_RATE_LIMIT_CREDENTIAL tunable) ===
+429s within 130 rapid credential-route calls: 16 (expect >0 once the 120/min window fills)
+
+UC7 complete - interpret results against FINDINGS.md

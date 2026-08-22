@@ -75,7 +75,7 @@ paginated. Read-only; the wire shapes already exist on `/ingest/traces`.
 
 ---
 
-## P2 - Enterprise IT checklist (target: next month) · PLANNED
+## P2 - Enterprise IT checklist · **DONE 2026-08-22** (see EXECUTION_LOG.md) · PLANNED
 
 The procurement blockers where incumbents win (Report gap #5, comparison table last rows).
 
@@ -134,7 +134,7 @@ Where the comparison table says incumbents win on capability, not just checklist
 - Outbound: signals + audit events to a webhook batch or OTLP/HTTP endpoint (`AGENTX_EXPORT_OTLP_URL`),
   so security teams land AgentX events in Splunk/Datadog without polling.
 
-### P3.4 Polish batch - **S**
+### P3.4 Polish batch - **S** · *sub-ms latency floor DONE 2026-08-22; rest planned*
 - Sub-ms latency display floor (`<1ms`), `run_id` on gate history rows, wire-case cleanup pass
   behind the P1.5 typed layer.
 

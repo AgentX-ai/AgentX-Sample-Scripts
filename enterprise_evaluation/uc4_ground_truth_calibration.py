@@ -11,7 +11,6 @@ Buyer questions:
 import os
 import time
 
-import requests
 from dotenv import load_dotenv
 from agentx import AgentX
 
@@ -22,7 +21,6 @@ BASE_URL = os.getenv("AGENTX_SELFHOST_BASE_URL", "http://localhost:4791/api/v1")
 bootstrap = AgentX(api_key=os.environ.get("AGENTX_API_KEY", ""), base_url=BASE_URL)
 project = bootstrap.projects.create(f"UC4 calibration {int(time.time())}")
 KEY = project["apiKey"]
-HEADERS = {"x-api-key": KEY, "Content-Type": "application/json"}
 client = AgentX(api_key=KEY, base_url=BASE_URL)
 client.ping()
 
@@ -47,10 +45,8 @@ client.outcomes.report(trace_id=flagged_bad, outcome="confirmed_leak", is_negati
 client.outcomes.report(trace_id=flagged_fine, outcome="reviewed_fine", is_negative=False, reported_by="sec-review")
 client.outcomes.report(trace_id=healthy_fine, outcome="csat_good", is_negative=False, reported_by="csat-sync")
 
-# --- Calibration read-back -------------------------------------------------------------------
-# (Project-level calibration remains REST-only; per-evaluator calibration IS in the SDK via
-# client.monitor.online_evaluators.calibration - noted for P1 follow-up.)
-cal = requests.get(f"{BASE_URL}/agent-monitoring/calibration?window=24h", headers=HEADERS, timeout=15).json()
+# --- Calibration read-back (pure SDK - the last requests call left this script in round 1) ----
+cal = client.monitor.calibration(window="24h")
 print(f"reported={cal['reportedCount']} compared={cal['comparedCount']} "
       f"agreement={cal['agreementRate']:.2f} FP={cal['falsePositiveRate']:.2f} FN={cal['falseNegativeRate']:.2f}")
 
