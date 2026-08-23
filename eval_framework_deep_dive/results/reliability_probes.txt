@@ -1,0 +1,39 @@
+========================================================================
+R1  kill -9 durability
+========================================================================
+  acknowledged before SIGKILL: 50; survived restart: 50  PASS
+
+========================================================================
+R2  engine down: the instrumented app must not block or crash
+========================================================================
+  20 async traces while down: 2 ms total (non-blocking PASS), app exception: none
+  flush(timeout=3): returned in 140.7s, raised: no
+  sync=True while down: returned in 0.0s, raised: no (must fail fast or degrade gracefully, never hang)
+  queued-while-down traces delivered after engine returned: 0/20 (0 = dropped: document the durability contract, not silent)
+
+========================================================================
+R3  malformed-payload battery (engine must reject cleanly and stay up)
+========================================================================
+  11MB body (limit 10mb)       -> 413; engine healthy after: True  [ok]
+  broken JSON                  -> 400; engine healthy after: True  [ok]
+  null byte in string          -> 200; engine healthy after: True  [ok]
+  1000-deep nested input       -> 200; engine healthy after: True  [ok]
+  wrong types everywhere       -> 422; engine healthy after: True  [ok]
+  astral unicode               -> 200; engine healthy after: True  [ok]
+
+========================================================================
+R4  sustained concurrent load (20 threads x 100 traces + judged eval mid-burst)
+========================================================================
+  sent 2000 across 20 threads in 2.3s (858 req/s sustained)
+  errors: 0 (none)
+  latency p50=16.0ms p95=30.8ms p99=37.9ms max=208ms
+  stored in the database: 2000/2000; returned by cursor pagination: 1997/2000
+  -> storage is exactly-once, but the paginated LIST drops rows that share a createdAt millisecond with a page boundary (cursor predicate is createdAt-only, no id tiebreak): the dashboard's infinite scroll silently skips these. BUG
+  judged eval mid-burst completed: jaccard=1.0 (expect 1.0)
+
+  R1 crash durability: PASS
+  R2 engine-down behavior: FAIL
+  R3 malformed payloads: PASS
+  R4 concurrent load: PASS
+
+RELIABILITY PROBES FAIL

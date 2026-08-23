@@ -1,0 +1,27 @@
+=== Q1 wire-casing seams (write snake_case, read camelCase) ===
+  wrote snake_case ['session_id', 'latency_ms', 'span_id']; response carries ['sessionId', 'latencyMs', 'spanId']
+  -> one wire, two casings: the write side is snake_case, the read side camelCase.
+
+=== Q2 test discipline (the vendor's own suites, run locally) ===
+  engine:   65 test files (incl. sqlite+postgres dialect matrix, concurrency, restart, resilience)
+  frontend: 211 test files
+  sdk:      4 test files
+  (full runs recorded in results/: engine 483 passed, frontend 1105 passed, sdk 53 passed
+   + 2 pre-existing failures on clean main + 21 skipped)
+
+=== Q3 compiler strictness ===
+  engine tsconfig strict: True
+  engine tsconfig noUncheckedIndexedAccess: True
+  engine tsconfig noUnusedLocals: None
+  engine tsconfig noImplicitOverride: None
+  engine tsconfig exactOptionalPropertyTypes: None
+  sdk ships py.typed: yes
+
+=== Q4 dependency surface ===
+  engine runtime deps: 16
+  sdk runtime deps:    4
+
+=== Q5 dashboard bundle weight (what a browser downloads) ===
+  dist total:  13M; all JS: 9 MB; largest chunk: 2940	/Users/robin/AgentX/AgentX-eval-front/dist/assets/index-CeQ-951e.js
+
+quality evidence complete

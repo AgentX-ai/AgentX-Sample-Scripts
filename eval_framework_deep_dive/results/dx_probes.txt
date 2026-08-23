@@ -1,0 +1,55 @@
+========================================================================
+D1  Cold start: time-to-first-value
+========================================================================
+import agentx:                      140 ms
+client + project setup:              59 ms
+first trace stored + read:            6 ms  (readable: True)
+first judged eval (2 cases):        3.2 s   (avg rating: 10.0)
+
+========================================================================
+D2  Error-message battery (verbatim, graded)
+========================================================================
+
+[E1 wrong API key]
+  AgentXAuthError: Invalid or missing API key
+
+[E2 wrong port (engine down)]
+  AgentXMonitorError: Request failed after retries: HTTPConnectionPool(host='localhost', port=59999): Max retries exceeded with url: /api/v1/monitor/kpis?window=7d (Caused by NewConnectionError("HTTPConnection(host='localhost', port=59999): Failed to establish a new connection: [Errno 61] Connection r
+
+[E3 dataset case missing required field]
+  TypeError: add_case() missing 1 required positional argument: 'query'
+
+[E4 run on nonexistent dataset id]
+  AgentXEvaluationsError: HTTP 404: {"error":"Dataset not found"}
+
+[E5 read nonexistent trace]
+  AgentXTracesError: Trace request failed (404): Trace not found
+  (returned, not raised) {'ok': False, 'error': 'python3 exited with code 1: Traceback (most recent call last):\n  File "<string>", line 32, in <module>\n  File "<string>", line 7, in _main\n  File "<string>", line 1\n    def handler(:\n        
+
+[E6 scorer dry-run with Python syntax error]
+  NO ERROR RAISED (finding if an error was expected)
+  (accepted without error) enabled templates now: [] - did the typo silently vanish or stick?
+
+[E7 enable a template scorer that doesn't exist]
+  NO ERROR RAISED (finding if an error was expected)
+
+[E8 feedback on nonexistent trace]
+  AgentXFeedbackError: Failed to report feedback (404): Trace not found
+
+[E9 second client with different base_url breaks the first (global-state leak)]
+  ConnectionError: HTTPConnectionPool(host='localhost', port=59999): Max retries exceeded with url: /api/v1/ingest/traces/lcNnS_Jj5DvS63Dw1O_9P (Caused by NewConnectionError("HTTPConnection(host='localhost', port=59999): Failed to establish a new connection: [Errno 61] Connection refused"))
+
+========================================================================
+D3  Ergonomics inventory
+========================================================================
+  tracer.trace: docstring=True keyword-only-params=9
+  evaluations.run: docstring=True keyword-only-params=0
+  datasets.builder: docstring=False keyword-only-params=0
+  monitor.scorers.create_code: docstring=True keyword-only-params=7
+  export.dump: docstring=True keyword-only-params=0
+  feedback.report: docstring=True keyword-only-params=2
+  outcomes.report: docstring=True keyword-only-params=6
+  docstring coverage on probed surfaces: 6/7
+  typed rows: .rating=10.0 .trace_id set=False; dict-access shim warns: True; .raw dict available: True
+
+DX probes complete

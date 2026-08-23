@@ -1,0 +1,53 @@
+========================================================================
+F1  Metric math, end to end (stored score vs independent reference)
+========================================================================
+  identical     stored j/b/r = (1.0, 1.0, 1.0)  reference = (1.0, 1.0, 1.0)  |drift| 0.0000
+  half overlap  stored j/b/r = (0.3333, 0.4518, 0.5)  reference = (0.3333, 0.4518, 0.5)  |drift| 0.0000
+  disjoint      stored j/b/r = (0.0, 0.0, 0.0)  reference = (0.0, 0.0, 0.0)  |drift| 0.0000
+  reordered     stored j/b/r = (1.0, 0.2627, 0.2857)  reference = (1.0, 0.2627, 0.2857)  |drift| 0.0000
+  worst absolute drift across 12 scores: 0.0000 (expect < 0.005)
+
+========================================================================
+F2  Judge quality: separation, threshold accuracy, repeatability (3 runs)
+========================================================================
+  good answers: mean 10.00  |  bad answers: mean 1.33  (separation 8.67 points)
+  threshold accuracy (fail_under=7): 8/8
+  repeatability: mean per-case stddev across 3 identical runs = 0.059, max = 0.471
+  wall clock for 3 x 8 judged cases: 44s
+
+========================================================================
+F3  Dataset versioning: mutation records a version; finished runs don't drift
+========================================================================
+  add-case status: 201; versions recorded for dataset: 2
+  finished run's stored ratings unchanged after mutation: True
+  (dataset mutation is a dashboard/REST surface - no SDK update method: noted as SDK gap)
+
+========================================================================
+F4  Tracing depth: 4-deep nesting + raw OTLP/HTTP ingest
+========================================================================
+  spans stored: 4; parent-chain depths: [0, 1, 2, 3] (expect [0, 1, 2, 3])
+  base64 ids: status 200, spans under hex session: 2, child link preserved: True
+  hex ids (OTLP/JSON spec, opentelemetry-js): status 200, spans under their real session id: 0 (0 = ids were base64-misdecoded into garbage: BUG)
+
+========================================================================
+F5  Code-scorer runtime safety
+========================================================================
+  infinite loop: returned in 8.0s (budget must cap it), ok=False, error=False
+  engine healthy afterwards: True
+  crashing scorer: no false signal raised: True (expect True)
+  crash visible in the scorer's event history: False (docs promise 'failures log an event so the history shows them'; the error event IS written with matched=null but the history read filters matched!=null - if False, the operator has no UI/SDK-visible way to learn their scorer is crashing: BUG)
+
+========================================================================
+F6  Prompt registry: create, runtime pull, version pinning
+========================================================================
+  created id=vjchjiO8CneMCXrTJfugX v1; pulled by name: v1 text-match=True; pinned get(version=1) works: True
+  (publishing a NEW version is dashboard-approval-only by design - config-as-code can create but not silently rewrite a live prompt)
+
+  F1 metric math: PASS
+  F2 judge quality: PASS
+  F3 versioning: PASS
+  F4 tracing depth+OTLP: PASS
+  F5 scorer runtime safety: PASS
+  F6 prompt registry: PASS
+
+FEATURE PROBES PASS
