@@ -30,6 +30,15 @@ from agentx import AgentX
 load_dotenv()
 
 AGENTX_BASE_URL = os.getenv("AGENTX_SELFHOST_BASE_URL", "http://localhost:4700/api/v1")
+
+# A real Databricks serving endpoint is the whole point of this sample - exit with instructions
+# instead of a KeyError traceback when the credentials are absent.
+_missing = [k for k in ("DATABRICKS_HOST", "DATABRICKS_ENDPOINT", "DATABRICKS_TOKEN") if not os.getenv(k)]
+if _missing:
+    raise SystemExit(
+        f"Skipping: set {', '.join(_missing)} to point this sample at your Databricks "
+        "model-serving endpoint (workspace URL, endpoint name, and a PAT)."
+    )
 DATABRICKS_HOST = os.environ["DATABRICKS_HOST"].rstrip("/")
 DATABRICKS_ENDPOINT = os.environ["DATABRICKS_ENDPOINT"]
 DATABRICKS_TOKEN = os.environ["DATABRICKS_TOKEN"]
