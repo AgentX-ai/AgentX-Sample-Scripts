@@ -104,3 +104,82 @@ Chronological, unfiltered. Rolled up (with severity judgments) in REPORT.md.
   setups. Correction during testing: an earlier 30/15min figure came from a stale build.
 - [GAP] No bulk export / backup API: getting data OUT is paginated REST or copying the SQLite
   file / pg dump. No OTLP re-export, no audit log, no SAML/SCIM (OAuth is Google/GitHub only).
+
+---
+
+# Round 2 (2026-08-22) - after the P0-P2 improvement phases
+
+Same buyer, same method: every open finding above re-probed, plus three new use cases
+(UC8 backup/restore, UC9 audit trail, UC10 SSO). Fresh engine, fresh projects, results in
+`results/`.
+
+## Round-1 findings, re-tested
+
+- UC1 sync=True child-span race - **RESOLVED (P0.1)**, root `sync=True` drains the whole tree;
+  UC1 passes with the manual flush deleted (20/20 in acceptance, re-verified this round).
+- UC1 no SDK trace read-back - **RESOLVED (P1.2)**: `client.traces.get/list`.
+- UC1 `latencyMs=0` display - **RESOLVED (P3.4 polish)**: every latency render floors to
+  `<1ms` (shared formatter + timeline/duration components; the trace stat no longer shows
+  "0.00 s", and the old "0μs" lie in the span timeline is gone). Unit-tested.
+- UC2 code scorers not in SDK builder - **RESOLVED (P1.4)** (`code_scorers=` kwarg).
+- UC2 wire-cased dict results - **RESOLVED (P1.5)**: typed rows + one-version dict shim.
+- UC2 noisy CI output - **RESOLVED (P1.5)**: `AGENTX_EVAL_QUIET=1` (9-line CI log verified).
+- UC3 no SDK scorer administration - **RESOLVED (P1.3)**: `client.monitor.scorers.*`; UC3 runs
+  with zero `import requests`.
+- UC4 project calibration REST-only - **RESOLVED**: `client.monitor.calibration(window)`; UC4
+  is now pure SDK too.
+- UC7 redaction placebo - **RESOLVED round 1 (by removal)**; UC7.2 still guards its return: 0
+  redaction fields advertised.
+- UC7 "no bulk export / backup API" - **RESOLVED (P2.1)**, see UC8 below.
+- UC7 "no audit log" - **RESOLVED (P2.2)**, see UC9 below.
+- UC7 "OAuth is Google/GitHub only" - **PARTIALLY RESOLVED (P2.3)**: generic OIDC covers the
+  Okta/Entra/Auth0/Workspace/Keycloak class via one env trio (see UC10). SAML and SCIM remain
+  unsupported - now documented explicitly rather than implied.
+- UC3 code scorers unsandboxed - **UNCHANGED, accepted + documented** (trusted-operator model).
+
+## UC8 - backup & restore drill (new)
+
+- [GOOD] `client.export.dump(dir)` wrote 15 entities as NDJSON with a manifest whose row
+  counts matched reality exactly (6 traces / 1 feedback / 2 outcomes - the 2 includes the
+  downvote's dual-written outcome, consistent with UC4's round-1 finding).
+- [GOOD] Replay-restore (the documented DR path) reconstructed the project in full: 6/6
+  content markers, session grouping preserved, verified through a second export of the target.
+- [GOOD] Incremental `since=` filters work in both directions (0 rows future, all rows past) -
+  a nightly delta job is one SDK call.
+- [NOTE] Replay assigns new row ids/timestamps on the target (originals stay in the exported
+  file). Fine for DR, worth knowing for forensics - use the database-level path when byte-level
+  history matters.
+
+## UC9 - audit trail (new)
+
+- [GOOD] Scorer create/delete each landed as exactly one row with an honest actor
+  (`project:<id>`), entity id, and a values-free summary - the probe's `SECRET-MARKER` planted
+  in the scorer script never appeared anywhere in the trail.
+- [GOOD] Data-plane ingest produced zero audit rows (the trail stays readable), while bulk
+  export reads are IN the trail (`export.read`) - the exact egress visibility a security team
+  asks for.
+- [GOOD] Gating and immutability: reads 401 without the operator token; PUT/PATCH/DELETE/POST
+  on the audit surface all 404 - no mutation surface exists to abuse.
+- [GOOD] Auth events (sign-up/sign-in, success AND failure, with attempted email) verified in
+  the engine's own integration suite; passwords asserted never to reach the trail.
+
+## UC10 - enterprise SSO surface (new)
+
+- [GOOD] The `AGENTX_OIDC_*` env trio lights up a real handshake, not a painted button: the
+  engine fetched the stub IdP's discovery document and returned its authorization URL with the
+  right client_id. `/auth/config` advertises `oidc` + the `AGENTX_OIDC_NAME` label.
+- [GOOD] No placebo: without the trio, nothing is advertised and the oauth2 route rejects the
+  unknown provider.
+- [GOOD] A foreign `callbackURL` is rejected (`INVALID_CALLBACK_URL`) unless the origin is in
+  `AGENTX_TRUSTED_ORIGINS` - no open redirect through the SSO leg.
+- [RISK] The full IdP round trip (login -> callback -> session) is CI-verified only against a
+  stub's discovery+authorize leg; the plan's own rule stands: verify against one real IdP
+  before each release.
+
+## Still open after round 2
+
+- [GAP] No OTLP/SIEM re-export of signals + audit events (P3.3) - polling the export API is
+  the workaround.
+- [GAP] Python-only SDK (P3.1, TypeScript planned).
+- [GAP] No human annotation queues (P3.2).
+- [GAP] No SAML/SCIM (explicitly out of scope; OIDC is the supported enterprise door).

@@ -1,0 +1,12 @@
+time-to-first-trace: 0.01s
+turn1 trace: LBIQGSdRnc3Yhs02EigoC  turn2 trace: ihcgoDLSvJot8QBSDrW23
+session spans recorded: 4 (expect 2 roots, tool calls recorded on them)
+  name=buyer-support-agent model=gpt-4o-mini latencyMs=0 toolCalls=1 err=False
+  name=lookup_order model=None latencyMs=0 toolCalls=0 err=False
+  name=buyer-support-agent model=gpt-4o-mini latencyMs=0 toolCalls=1 err=True
+  name=escalate_to_human model=None latencyMs=0 toolCalls=0 err=True
+turn2 error captured on root: EscalationTimeout: no agents available after 30s
+failed tool in root toolCalls: True (escalate_to_human)
+failed tool as its own child span: True
+
+UC1 PASS

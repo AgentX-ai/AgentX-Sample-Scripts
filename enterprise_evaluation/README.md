@@ -53,8 +53,12 @@ bash uc7_operations.sh  # ops probes (auth modes, isolation, limits) - curl-base
 | `uc5_rag_faithfulness.py` | RAG: retrieval spans, expected-context Jaccard, faithfulness judge |
 | `uc6_session_multiturn.py` | Session-scoped evaluation of multi-turn conversations |
 | `uc7_operations.sh` | Ops surface: auth modes, project isolation, rate limits, ingest throughput |
-| `FINDINGS.md` | Raw chronological findings log (bugs, gaps, friction, praise) |
-| `REPORT.md` | The final buyer report: rubric, scores, comparison, recommendation |
+| `uc8_backup_restore_drill.py` | Round 2: NDJSON export, replay-restore, incremental backup (`client.export`) |
+| `uc9_audit_trail.sh` | Round 2: audit completeness, values-free summaries, gating, immutability |
+| `uc10_sso_surface.sh` | Round 2: generic-OIDC handshake against a stub IdP; no-placebo check |
+| `FINDINGS.md` | Raw chronological findings log (bugs, gaps, friction, praise) + round-2 re-test |
+| `REPORT.md` | Round-1 buyer report: rubric, scores, comparison, recommendation |
+| `REPORT_ROUND2.md` | Round-2 re-assessment after P0-P2: deltas, re-scored rubric (4.8/5), verdict |
 | `DEVELOPMENT_PLAN.md` | The improvement plan derived from the report (infrastructure focus) |
 | `EXECUTION_LOG.md` | Per-phase execution record with acceptance evidence |
 

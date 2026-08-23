@@ -1,0 +1,6 @@
+session grouped: 3 turns under buyer-session-1787432986
+coherence: 3/10 across 3 spans
+justification: The session initially retained Priya's name and order number, correctly provided the delivery status, and handled the concierge request cons
+drift span identified: True
+
+UC6 PASS

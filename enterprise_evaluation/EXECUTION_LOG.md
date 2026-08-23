@@ -71,9 +71,57 @@ as a small follow-up).
 
 ---
 
-## P2 - Enterprise IT checklist · **PLANNED**
-Bulk export + backup runbook · audit log · generic OIDC SSO · HA/DR guidance.
-See DEVELOPMENT_PLAN.md for designs and acceptance criteria.
+## P2 - Enterprise IT checklist · **DONE** (2026-08-22)
+
+### P2.1 Bulk export + backup runbook
+- **Engine**: `GET /export` manifest (15 entities, live row counts) + `GET /export/:entity`
+  streaming NDJSON, keyset-paginated on `id`, `?since=` incremental, project-scoped by API key.
+  No blind import endpoint, deliberately - restore = replay or database-level.
+- **SDK**: `client.export.manifest() / .iter(entity, since=) / .dump(dir, entities=, since=)`.
+- **Docs**: `self-host/backup` runbook (dump examples, both restore paths, suggested schedule).
+- **Acceptance evidence**: engine suite `exportData.integration.test.ts` (6 tests incl. the
+  round trip: export a seeded project, replay into a fresh one, counts + content match);
+  buyer probe UC8 PASS (results/uc8_backup_restore.txt) - 6/6 content markers, sessions
+  preserved, incremental filters correct.
+
+### P2.2 Append-only audit log
+- **Engine**: `audit_events` table (both dialects); response-finish tap on the /api/v1 router
+  classifying control-plane mutations (scorer/pattern/judge CRUD, settings, key regeneration,
+  projects) + auth events (attempted email sniffed pre-body-parser, passwords never) + bulk
+  egress reads (`export.read`). Values-free summaries: field NAMES only, plus `name`.
+  Data plane excluded. Reads: `GET /admin/audit` (operator token) and org-scoped
+  `GET /auth-org/audit`. No update/delete surface exists anywhere.
+- **Acceptance evidence**: `audit.integration.test.ts` (6 tests: one row per lifecycle event,
+  secrets never land, ingest never lands, 401 gating, 404 on every mutation verb, auth-mode
+  sign-up/sign-in rows incl. failure); buyer probe UC9 PASS (results/uc9_audit_trail.txt).
+
+### P2.3 Generic OIDC SSO
+- **Engine**: `AGENTX_OIDC_ISSUER/CLIENT_ID/CLIENT_SECRET` (+ `AGENTX_OIDC_NAME` label) wires
+  better-auth's genericOAuth with OIDC discovery; `/auth/config` advertises `oidc` + `ssoLabel`.
+- **Dashboard**: SSO button (label from config) posting to `sign-in/oauth2` with providerId.
+- **Docs**: configuration env table + authentication.mdx; SAML/SCIM explicitly unsupported.
+- **Acceptance evidence**: `oidc.integration.test.ts` (3 tests against a stub issuer: config
+  surface, real discovery fetch + authorization URL, nothing advertised without the trio);
+  buyer probe UC10 PASS (results/uc10_sso_surface.txt). Per the plan, one real-IdP login
+  verification remains a per-release checklist item.
+
+### P2.4 HA/DR guidance
+- **Docs**: `self-host/high-availability` - reference topology, what is multi-replica-safe
+  with the engine's own tests cited as evidence (sweep leases, 60-way concurrent ingest),
+  the three per-process caveats (rate-limit counters!), zero-downtime upgrade order, RPO/RTO
+  table tied to the P2.1 backup story.
+
+### Also in this batch (P3.4 partial + calibration parity)
+- Sub-ms latency display floor: `<1ms` everywhere (shared formatter, span timeline's `0μs`
+  fixed, trace Duration stat) - unit-tested, closes UC1's last friction row.
+- `client.monitor.calibration(window)` - UC4 now runs with zero `import requests`.
+
+### Round 2 assessment
+- Full re-run UC1-7 PASS on a fresh engine + three new probes UC8/9/10 PASS.
+- FINDINGS.md gained a "Round 2" section (every round-1 finding re-tested with disposition);
+  REPORT_ROUND2.md re-scores the rubric **4.3 -> 4.8 / 5** and upgrades the verdict from
+  "conditional adopt" to "adopt". Still open, now roadmap-not-trust: TS SDK, annotation
+  queues, OTLP/SIEM streaming, SAML/SCIM (explicitly out of scope).
 
 ## P3 - Competitive bets · **PLANNED**
 TypeScript SDK · human annotation queues · OTLP/SIEM streaming · polish batch.
