@@ -8,6 +8,11 @@ scope gets scored automatically in the background as it's ingested, nothing in t
 code changes to make this happen, sending the trace is enough.
 """
 
+# NOTE: since the judge-scorer unification, the preferred surface for everything in
+# this script is client.monitor.judge_scorers (one entity: rubric + offline + online
+# profiles) - see 15_unified_judge_scorer.py. The surfaces used below keep working.
+
+
 import json
 import os
 import time

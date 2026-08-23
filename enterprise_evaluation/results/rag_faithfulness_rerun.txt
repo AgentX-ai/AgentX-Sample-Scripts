@@ -1,7 +1,7 @@
 ────────────────────────────────────────────────────────────
   AgentX Evaluation   -   Buyer RAG retriever gate
 ────────────────────────────────────────────────────────────
-  Run   : Prz7VTbO9ZzSdHJz9yIKy
+  Run   : eRSJmsY4BhC_95senQHCg
   Agent : buyer-rag  (custom / local)
 
 Executing  2 questions × 1 run

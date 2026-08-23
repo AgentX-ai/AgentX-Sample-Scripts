@@ -15,6 +15,11 @@ from your ticket system, and re-scores from the dashboard's signal-triage Feedba
 richest source, since those carry a human rationale).
 """
 
+# NOTE: since the judge-scorer unification, the preferred surface for everything in
+# this script is client.monitor.judge_scorers (one entity: rubric + offline + online
+# profiles) - see 15_unified_judge_scorer.py. The surfaces used below keep working.
+
+
 import os
 import time
 
