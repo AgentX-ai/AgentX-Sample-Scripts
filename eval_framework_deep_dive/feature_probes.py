@@ -288,8 +288,9 @@ spans_hex = client.monitor.list_session_spans(TID2.hex())
 print(f"  base64 ids: status {r_b64.status_code}, spans under hex session: {len(spans_b64)}, "
       f"child link preserved: {linked_b64}")
 print(f"  hex ids (OTLP/JSON spec, opentelemetry-js): status {r_hex.status_code}, spans under "
-      f"their real session id: {len(spans_hex)} (0 = ids were base64-misdecoded into garbage: BUG)")
-f4b_ok = r_b64.status_code < 300 and len(spans_b64) == 2 and linked_b64  # hex handling logged as a finding
+      f"their real session id: {len(spans_hex)} (expect 2 - was 0 before the bug #3 fix)")
+f4b_ok = (r_b64.status_code < 300 and len(spans_b64) == 2 and linked_b64
+          and len(spans_hex) == 2)  # both spec encodings must round-trip post-fix
 
 print()
 print("=" * 72)
@@ -317,10 +318,9 @@ events = client.monitor.scorers.events(scorer["_id"], window="24h")
 signals = [x for x in client.monitor.signals.list(limit=50) if x.pattern_key.startswith("custom-eval:")]
 print(f"  crashing scorer: no false signal raised: {len(signals) == 0} (expect True)")
 print(f"  crash visible in the scorer's event history: {len(events) >= 1} "
-      f"(docs promise 'failures log an event so the history shows them'; the error event IS "
-      f"written with matched=null but the history read filters matched!=null - if False, the "
-      f"operator has no UI/SDK-visible way to learn their scorer is crashing: BUG)")
-f5_ok = t_loop < 15 and health.get("status") == "ok" and len(signals) == 0  # invisibility logged as a finding
+      f"(expect True - error events were filtered out of the history read before the bug #4 fix)")
+f5_ok = (t_loop < 15 and health.get("status") == "ok" and len(signals) == 0
+         and len(events) >= 1)  # the crash must be visible post-fix
 
 print()
 print("=" * 72)

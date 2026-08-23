@@ -12,8 +12,8 @@ F2  Judge quality: separation, threshold accuracy, repeatability (3 runs)
 ========================================================================
   good answers: mean 10.00  |  bad answers: mean 1.33  (separation 8.67 points)
   threshold accuracy (fail_under=7): 8/8
-  repeatability: mean per-case stddev across 3 identical runs = 0.059, max = 0.471
-  wall clock for 3 x 8 judged cases: 44s
+  repeatability: mean per-case stddev across 3 identical runs = 0.177, max = 0.471
+  wall clock for 3 x 8 judged cases: 43s
 
 ========================================================================
 F3  Dataset versioning: mutation records a version; finished runs don't drift
@@ -27,7 +27,7 @@ F4  Tracing depth: 4-deep nesting + raw OTLP/HTTP ingest
 ========================================================================
   spans stored: 4; parent-chain depths: [0, 1, 2, 3] (expect [0, 1, 2, 3])
   base64 ids: status 200, spans under hex session: 2, child link preserved: True
-  hex ids (OTLP/JSON spec, opentelemetry-js): status 200, spans under their real session id: 0 (0 = ids were base64-misdecoded into garbage: BUG)
+  hex ids (OTLP/JSON spec, opentelemetry-js): status 200, spans under their real session id: 2 (expect 2 - was 0 before the bug #3 fix)
 
 ========================================================================
 F5  Code-scorer runtime safety
@@ -35,12 +35,12 @@ F5  Code-scorer runtime safety
   infinite loop: returned in 8.0s (budget must cap it), ok=False, error=False
   engine healthy afterwards: True
   crashing scorer: no false signal raised: True (expect True)
-  crash visible in the scorer's event history: False (docs promise 'failures log an event so the history shows them'; the error event IS written with matched=null but the history read filters matched!=null - if False, the operator has no UI/SDK-visible way to learn their scorer is crashing: BUG)
+  crash visible in the scorer's event history: True (expect True - error events were filtered out of the history read before the bug #4 fix)
 
 ========================================================================
 F6  Prompt registry: create, runtime pull, version pinning
 ========================================================================
-  created id=vjchjiO8CneMCXrTJfugX v1; pulled by name: v1 text-match=True; pinned get(version=1) works: True
+  created id=5qaC1gs4DC3HcN0n7GYGX v1; pulled by name: v1 text-match=True; pinned get(version=1) works: True
   (publishing a NEW version is dashboard-approval-only by design - config-as-code can create but not silently rewrite a live prompt)
 
   F1 metric math: PASS

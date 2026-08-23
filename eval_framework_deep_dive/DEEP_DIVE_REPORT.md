@@ -225,3 +225,25 @@ multi-language SDKs, and OTLP JSON interop (Phoenix is the reference implementat
 4. Use the OTLP protobuf protocol, not JSON, for OTel exporters until #3 is fixed.
 5. Re-run this folder's probes on each engine upgrade; they are the regression contract for
    the read-side class of bug the vendor's own suite does not currently cover.
+
+---
+
+## Addendum (same day): all six bugs fixed and probe-verified
+
+The vendor turned the bug table into fixes within the day; this suite's pass gates were then
+TIGHTENED to the post-fix expectations (a regression in any of the six now fails the probes)
+and re-run green against the fixed engine and SDK. Evidence per bug:
+
+| # | Fix | Probe verification |
+|---|---|---|
+| 1 | `AgentX.__init__` no longer writes `AGENTX_API_BASE_URL` into `os.environ`; every sub-client (projects, traces, export, feedback, outcomes, scorers) now captures its base at construction, consistently | dx E9: original client keeps working after a second client with a different base is constructed; SDK unit tests assert env stays untouched and both clients' surfaces hold their own base |
+| 2 | `PUT settings/monitoring-defaults` rejects unknown template-scorer keys with a 400 naming the typo and the known-key list | dx E7: `Scorer request failed (400): Unknown template scorer key(s): totally-made-up-scorer`; engine test asserts the typo is never stored |
+| 3 | OTLP id decoding detects the encoding by shape (32/16-char pure hex = OTLP/JSON spec ids; otherwise base64 from the protobuf object mapping) | F4: hex-id export now stores 2/2 spans under the real session id; base64 unchanged; engine tests cover both encodings |
+| 4 | The scorer-event history read no longer filters out `matched: null` rows, so a scorer's own failures appear with the error as justification | F5: crash visible in history = True, still zero false signals; engine test polls the event into visibility |
+| 5 | `flush(timeout)` is a real wall-clock bound (timed condition wait instead of `queue.join()`), returns `True`/`False`, and every dropped trace now logs a WARNING with a running count | R2: `flush(timeout=3)` returned in 3.0 s (was 140.8 s). Side benefit measured: because flush no longer burns each item's full retry schedule, 19/20 traces queued during the outage were actually delivered once the engine came back, and the one genuine drop warned instead of vanishing |
+| 6 | Trace-list keyset pagination gained an id tiebreak (`createdAt DESC, id DESC` with a matching cursor predicate) | R4: database 2000/2000 AND paginated read 2000/2000 (was 1997); engine test paginates 175 hand-planted timestamp collisions with zero loss and zero dupes |
+
+Suites after the fixes: engine 492 passed (9 new regression tests), SDK 57 passed (4 new)
+with only the 2 failures that pre-exist on clean `main`, frontend untouched. The
+"choose with a bug list" verdict is now simply **choose**: the read-side cluster is closed,
+and this folder remains the regression contract that keeps it closed.

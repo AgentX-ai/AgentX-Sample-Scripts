@@ -238,11 +238,11 @@ db_total = sqlite3.connect(os.path.join(HOME, "agentx.db")).execute(
 ).fetchone()[0]
 print(f"  stored in the database: {db_total}/2000; returned by cursor pagination: {total}/2000")
 if db_total == 2000 and total < 2000:
-    print("  -> storage is exactly-once, but the paginated LIST drops rows that share a "
-          "createdAt millisecond with a page boundary (cursor predicate is createdAt-only, "
-          "no id tiebreak): the dashboard's infinite scroll silently skips these. BUG")
+    print("  -> storage is exactly-once, but the paginated LIST dropped rows sharing a "
+          "createdAt millisecond with a page boundary - bug #6 regressed (id tiebreak missing)")
 print(f"  judged eval mid-burst completed: jaccard={eval_result} (expect 1.0)")
-r4_ok = len(errors) == 0 and db_total == 2000 and eval_result == 1.0  # pagination skip logged as a finding
+r4_ok = (len(errors) == 0 and db_total == 2000 and total == 2000
+         and eval_result == 1.0)  # pagination must return every stored row post-fix
 
 hard_kill(proc)
 print()

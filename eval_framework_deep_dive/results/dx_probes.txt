@@ -1,10 +1,10 @@
 ========================================================================
 D1  Cold start: time-to-first-value
 ========================================================================
-import agentx:                      140 ms
+import agentx:                      153 ms
 client + project setup:              59 ms
-first trace stored + read:            6 ms  (readable: True)
-first judged eval (2 cases):        3.2 s   (avg rating: 10.0)
+first trace stored + read:            7 ms  (readable: True)
+first judged eval (2 cases):        3.4 s   (avg rating: 10.0)
 
 ========================================================================
 D2  Error-message battery (verbatim, graded)
@@ -28,16 +28,15 @@ D2  Error-message battery (verbatim, graded)
 
 [E6 scorer dry-run with Python syntax error]
   NO ERROR RAISED (finding if an error was expected)
-  (accepted without error) enabled templates now: [] - did the typo silently vanish or stick?
 
-[E7 enable a template scorer that doesn't exist]
-  NO ERROR RAISED (finding if an error was expected)
+[E7 enable a template scorer that doesn't exist (must now 400)]
+  AgentXScorersError: Scorer request failed (400): Unknown template scorer key(s): totally-made-up-scorer
 
 [E8 feedback on nonexistent trace]
   AgentXFeedbackError: Failed to report feedback (404): Trace not found
 
-[E9 second client with different base_url breaks the first (global-state leak)]
-  ConnectionError: HTTPConnectionPool(host='localhost', port=59999): Max retries exceeded with url: /api/v1/ingest/traces/lcNnS_Jj5DvS63Dw1O_9P (Caused by NewConnectionError("HTTPConnection(host='localhost', port=59999): Failed to establish a new connection: [Errno 61] Connection refused"))
+[E9 second client with different base_url must NOT break the first (fixed)]
+  NO ERROR RAISED (finding if an error was expected)
 
 ========================================================================
 D3  Ergonomics inventory

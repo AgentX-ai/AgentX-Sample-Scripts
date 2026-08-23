@@ -116,14 +116,10 @@ def probe_dry_run_syntax_error():
 attempt("E6 scorer dry-run with Python syntax error", probe_dry_run_syntax_error)
 
 
-def probe_enable_unknown_scorer():
-    client.monitor.scorers.enable(["totally-made-up-scorer"])
-    stored = [t for t in client.monitor.scorers.templates() if t.get("enabled")]
-    print(f"  (accepted without error) enabled templates now: "
-          f"{[t.get('key') for t in stored]} - did the typo silently vanish or stick?")
-
-
-attempt("E7 enable a template scorer that doesn't exist", probe_enable_unknown_scorer)
+# Post-fix expectation (deep-dive bug #2, fixed): a typo'd key must be REJECTED with the
+# known-key list, never stored as a silent no-op.
+attempt("E7 enable a template scorer that doesn't exist (must now 400)",
+        lambda: client.monitor.scorers.enable(["totally-made-up-scorer"]))
 
 attempt("E8 feedback on nonexistent trace", lambda: client.feedback.report(
     "no-such-trace", "down", comment="x"
@@ -145,7 +141,9 @@ def probe_global_base_url():
             os.environ["AGENTX_API_BASE_URL"] = saved
 
 
-attempt("E9 second client with different base_url breaks the first (global-state leak)",
+# Post-fix expectation (deep-dive bug #1, fixed): NO error here is the pass - the first
+# client must keep working after a second client with a different base_url is constructed.
+attempt("E9 second client with different base_url must NOT break the first (fixed)",
         probe_global_base_url)
 
 print()
