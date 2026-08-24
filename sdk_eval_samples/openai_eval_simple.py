@@ -8,7 +8,6 @@ from agentx import AgentX
 from agentx.evaluations.models import (
     Dataset,
     EvaluationCase,
-    EvaluationSettings,
     Report,
 )
 from agentx.evaluations.runner import EvaluationRunContext
@@ -96,8 +95,8 @@ def support_agent(case: EvaluationCase) -> Dict[str, Any]:
 # A standalone, reusable grading config - independent of the dataset's own twin config, and with
 # all similarity metrics turned on (each defaults to False, both here and on the dataset itself).
 # Reuse this same settings id across other datasets/runs instead of rebuilding it each time.
-evaluation_settings: EvaluationSettings = client.evaluations.settings.builder(
-    name="two runs - Strict",
+evaluation_scorer = client.monitor.judge_scorers.builder(
+    "two runs - Strict",
     number_of_requests=2,
     acceptance_criteria="Accurate, concise, grounded in the support policy.",
     rejection_criteria="No hallucinated policies or made-up steps.",
@@ -106,7 +105,7 @@ evaluation_settings: EvaluationSettings = client.evaluations.settings.builder(
     bleu_score=True,
     rouge_score=True,
 ).publish()
-print(f"Published evaluation settings: {evaluation_settings.id}")
+print(f"Published judge scorer: {evaluation_scorer.id}")
 
 # Each step's return type is annotated explicitly: .execute()/.finalize() both return
 # EvaluationRunContext (no scores yet - those need scoring+analysis first); only .analyze()
@@ -121,7 +120,7 @@ run_context: EvaluationRunContext = (
             "displayName": "GPT-4o-mini Support Agent",
             "framework": "openai",
         },
-        evaluation_settings_id=evaluation_settings.id,
+        scorer_id=evaluation_scorer.id,
     )
     .execute(support_agent)
     .finalize()

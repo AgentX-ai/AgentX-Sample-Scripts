@@ -1,0 +1,13 @@
+=== 10.1 the sign-in screen learns about SSO from /auth/config ===
+auth config: {"mode":"enabled","needsSetup":true,"socialProviders":["oidc"],"emailEnabled":false,"verificationRequired":false,"ssoLabel":"Okta"}
+oidc advertised: True (expect True)
+button label from AGENTX_OIDC_NAME: True
+
+=== 10.2 the handshake is real: discovery fetched, authorize URL returned ===
+authorization URL points at the IdP: True (expect True)
+client_id forwarded: True (expect True)
+
+=== 10.3 without the env trio, nothing is advertised (no placebo buttons) ===
+oidc advertised without config: False (expect False)
+
+UC10 complete - interpret results against FINDINGS.md round 2

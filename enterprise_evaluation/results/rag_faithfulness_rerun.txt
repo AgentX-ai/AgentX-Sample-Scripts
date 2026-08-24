@@ -1,12 +1,12 @@
 ────────────────────────────────────────────────────────────
   AgentX Evaluation   -   Buyer RAG retriever gate
 ────────────────────────────────────────────────────────────
-  Run   : Prz7VTbO9ZzSdHJz9yIKy
+  Run   : 71wK_qG7ITpqcL3G3q-D1
   Agent : buyer-rag  (custom / local)
 
 Executing  2 questions × 1 run
   ✓  [1/2] Q1 run #1  What is the refund window?  4ms
-  ✓  [2/2] Q2 run #1  Is there a warranty on the espresso machine?  3ms
+  ✓  [2/2] Q2 run #1  Is there a warranty on the espresso machine?  2ms
   Scoring - AI is rating 2 results...
   ✓  Scored 2 results
 

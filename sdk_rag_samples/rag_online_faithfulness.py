@@ -121,16 +121,14 @@ chain = (
 # trace - use something like 0.1 on real traffic.
 # ---------------------------------------------------------------------------
 
-faithfulness = next(
-    s for s in client.evaluations.settings.list() if s.name == "RAG: Faithfulness"
+# The seeded template IS a judge scorer - switching its live scoring on is one sparse update,
+# no separate evaluator object to create.
+evaluator = next(s for s in client.monitor.judge_scorers.list() if s.name == "RAG: Faithfulness")
+client.monitor.judge_scorers.update(
+    evaluator.id,
+    online={"enabled": True, "sampleRate": 1.0, "alertThreshold": 5},  # below 5 raises a Signal
 )
-evaluator = client.monitor.online_evaluators.builder(
-    name="RAG Faithfulness (sample)",
-    evaluation_settings_id=faithfulness.id,
-    sample_rate=1.0,
-    alert_threshold=5,  # a response scoring below 5 raises a Signal
-).publish()
-print(f"Online evaluator {evaluator.id} referencing config '{faithfulness.name}'")
+print(f"Live scoring enabled on seeded judge scorer '{evaluator.name}' ({evaluator.id})")
 
 handler = AgentXCallbackHandler(tracer=client.tracer, name="rag-support-agent")
 for question in [
@@ -151,7 +149,7 @@ client.tracer.flush(timeout=10)
 
 events = []
 for _ in range(30):
-    events = client.monitor.online_evaluators.events(evaluator.id, window="24h")
+    events = client.monitor.judge_scorers.events(evaluator.id, window="24h")
     if len(events) >= 2:
         break
     time.sleep(3)
@@ -161,5 +159,5 @@ for event in events:
 
 # Pause the evaluator so this sample does not keep judging (and paying for)
 # unrelated live traffic. Delete it instead if you do not want to keep it.
-client.monitor.online_evaluators.update(evaluator.id, enabled=False)
-print(f"\nPaused evaluator {evaluator.id} - re-enable it in Monitor -> Online Evaluators")
+client.monitor.judge_scorers.update(evaluator.id, online={"enabled": False})
+print(f"\nPaused live scoring on {evaluator.id} - re-enable it on the Scorers page")

@@ -15,6 +15,11 @@ from your ticket system, and re-scores from the dashboard's signal-triage Feedba
 richest source, since those carry a human rationale).
 """
 
+# NOTE: since the judge-scorer unification, the preferred surface for everything in
+# this script is client.monitor.judge_scorers (one entity: rubric + offline + online
+# profiles) - see 15_unified_judge_scorer.py. The surfaces used below keep working.
+
+
 import os
 import time
 
@@ -44,9 +49,9 @@ oai = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 patch_openai_client(oai, client.tracer)
 
 
-# --- Step 1: a judge to calibrate -----------------------------------------------------------
-settings = client.evaluations.settings.builder(
-    name="Judge Tuning Demo Bar",
+# --- Step 1: a judge to calibrate - ONE judge scorer, rubric + live scoring in one call ------
+evaluator = client.monitor.judge_scorers.builder(
+    "Judge Tuning Demo Evaluator",
     acceptance_criteria=(
         "Warm, friendly, and empathetic tone. Acknowledges the customer's concern, apologizes "
         "where appropriate, and reassures them the team cares. A caring, professional voice is "
@@ -56,10 +61,7 @@ settings = client.evaluations.settings.builder(
         "Cold or curt tone, telling the customer no, denying a request, or responses that feel "
         "unaccommodating."
     ),
-).publish()
-evaluator = client.monitor.online_evaluators.builder(
-    name="Judge Tuning Demo Evaluator",
-    evaluation_settings_id=settings.id,
+    live=True,
     sample_rate=1.0,
 ).publish()
 print(f"Evaluator: {evaluator.id} (criteria deliberately shallow - politeness over substance)")
@@ -87,7 +89,7 @@ print("Waiting for the online evaluator to score them...")
 scored = {}
 for _ in range(20):
     time.sleep(3)
-    events = client.monitor.online_evaluators.events(evaluator.id, window="24h")
+    events = client.monitor.judge_scorers.events(evaluator.id, window="24h")
     scored = {e.trace_id: e.rating for e in events if e.trace_id in trace_ids}
     if len(scored) == len(trace_ids):
         break
@@ -128,7 +130,7 @@ print("Agreeing ground truth reported for the other two (the validation control 
 
 
 # --- Step 5: per-evaluator calibration ------------------------------------------------------
-cal = client.monitor.online_evaluators.calibration(evaluator.id, window="24h")
+cal = client.monitor.judge_scorers.calibration(evaluator.id, window="24h")
 print(
     f"\nCalibration: {cal['agreements']}/{cal['withGroundTruth']} agreement"
     f" | missed: {cal['missed']} (judge passed it, reality said bad)"
@@ -147,7 +149,7 @@ if not cal["disagreementCases"]:
 
 # --- Step 6: rewrite the judge's own criteria from the disagreements ------------------------
 print("\nGenerating a criteria rewrite from the disagreements (one judge call)...")
-proposal = client.monitor.online_evaluators.tune(evaluator.id, window="24h")
+proposal = client.monitor.judge_scorers.tune(evaluator.id, window="24h")
 print(f"Reasoning: {proposal['reasoning'][:220]}")
 for change in proposal["changes"][:5]:
     print(f"  [{change['tag']}] {change['text'][:90]}")
@@ -159,17 +161,17 @@ for change in proposal["changes"][:5]:
 # directly - "fixes 2/2, preserves 2/2" is a mathematical claim, not a vibe.
 print("\nValidating: candidate criteria re-judge the disagreements + a control set...")
 criteria = {k: proposal[k] for k in ("acceptanceCriteria", "rejectionCriteria", "evaluationCriteria")}
-verdict = client.monitor.online_evaluators.validate_tuning(evaluator.id, criteria, window="24h")
+verdict = client.monitor.judge_scorers.validate_tuning(evaluator.id, criteria, window="24h")
 print(f"Verdict: {verdict['verdict'].upper()} (net {verdict['netAgreementGain']:+d})")
 print(verdict["summary"])
 
 
 # --- Step 8: publish (human-gated) ----------------------------------------------------------
 if PUBLISH:
-    client.monitor.online_evaluators.publish_tuning(evaluator.id, criteria)
+    client.monitor.judge_scorers.publish_tuning(evaluator.id, criteria)
     print("\nPublished: the evaluator's config now carries the tuned criteria (version history keeps the old one).")
 else:
-    print("\nPUBLISH=False, nothing was written. In the dashboard: Monitor > Online Evaluators >")
+    print("\nPUBLISH=False, nothing was written. In the dashboard: Scorers page >")
     print("Judge Tuning Demo Evaluator > row menu > Tune judge - the same evidence, rewrite, and")
     print("exact-validation verdict, with publish behind a human click. The richest evidence source")
     print("(a triage re-score with a rationale) is dashboard-only: Monitor > Signals > Feedback.")

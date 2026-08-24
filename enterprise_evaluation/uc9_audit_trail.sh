@@ -11,6 +11,16 @@ set -uo pipefail
 BASE=${AGENTX_SELFHOST_BASE_URL:-http://localhost:4791/api/v1}
 TOKEN=${AGENTX_ADMIN_TOKEN:?"set AGENTX_ADMIN_TOKEN to the operator token"}
 
+# The /admin routes sit behind the credential rate limit (120/min). If another probe (uc7's
+# deliberate 429 burst) just exhausted the window, every check below would read 429 instead of
+# its real answer - wait for the window to clear first.
+for i in $(seq 1 20); do
+  CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/admin/audit" -H "x-admin-token: $TOKEN")
+  [ "$CODE" != "429" ] && break
+  echo "credential rate-limit window still cooling down (attempt $i)..."
+  sleep 5
+done
+
 echo "=== 9.1 a scorer's lifecycle lands as audit rows ==="
 KEY=$(curl -s -X POST "$BASE/projects" -H 'content-type: application/json' \
   -d '{"name":"uc9-audit"}' | python3 -c "import json,sys; print(json.load(sys.stdin)['project']['apiKey'])")

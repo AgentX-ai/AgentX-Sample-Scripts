@@ -1,0 +1,14 @@
+=== 9.1 a scorer's lifecycle lands as audit rows ===
+scorer.create rows: 2 (expect >=1), scorer.delete for our id: 1 (expect 1)
+actor on create: project:QYLuW22wbisUhlqH6E5w6 (expect project:<id>)
+script content leaked into trail: False (expect False)
+data-plane ingest rows: 0 (expect 0); export.read rows: 22 (expect >=1)
+
+=== 9.2 reads are gated, and the trail is immutable ===
+read without token: HTTP 401; wrong token: HTTP 401 (expect 401/401)
+  PUT /admin/audit: HTTP 404 (expect 404 - no mutation surface exists)
+  PATCH /admin/audit: HTTP 404 (expect 404 - no mutation surface exists)
+  DELETE /admin/audit: HTTP 404 (expect 404 - no mutation surface exists)
+  POST /admin/audit: HTTP 404 (expect 404 - no mutation surface exists)
+
+UC9 complete - interpret results against FINDINGS.md round 2

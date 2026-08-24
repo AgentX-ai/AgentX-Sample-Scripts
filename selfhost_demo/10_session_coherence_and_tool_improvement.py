@@ -95,22 +95,19 @@ print(f"Tool schema ready: {TOOL_NAME} v{tool_schema['currentVersion']}")
 
 
 # --- Step 3: an online evaluator scoring this agent's live traffic (get-or-create) ---------------
-evaluators = client.monitor.online_evaluators.list()
-evaluator = next((e for e in evaluators if e.name == "Session Demo Quality Bar"), None)
-if evaluator is None:
-    settings = client.evaluations.settings.builder(
-        name="Session Demo Quality Bar Config",
+scorers = client.monitor.judge_scorers.list()
+existing = next((s for s in scorers if s.name == "Session Demo Quality Bar"), None)
+if existing is None:
+    client.monitor.judge_scorers.builder(
+        "Session Demo Quality Bar",
         acceptance_criteria="Consistent with earlier turns, grounded in the stated policy, moves the customer forward.",
         rejection_criteria="Contradicts an earlier turn, asks for information already provided, or drifts off-topic.",
-    ).publish()
-    client.monitor.online_evaluators.builder(
-        name="Session Demo Quality Bar",
-        evaluation_settings_id=settings.id,
+        live=True,
         sample_rate=1.0,
     ).publish()
-    print("Created online evaluator: Session Demo Quality Bar (sample rate 1.0)")
+    print("Created judge scorer with live scoring on: Session Demo Quality Bar (sample rate 1.0)")
 else:
-    print("Using existing online evaluator: Session Demo Quality Bar")
+    print("Using existing judge scorer: Session Demo Quality Bar")
 
 
 # --- Step 4: run the incoherent session for real -------------------------------------------------
@@ -294,7 +291,7 @@ if prompt_examples["exampleCount"] > 0:
 else:
     print(
         "No prompt evidence yet. The online evaluator scores asynchronously; wait a few seconds "
-        "and re-run, or check Monitor > Online Evaluators in the dashboard."
+        "and re-run, or check the Scorers page in the dashboard."
     )
 
 

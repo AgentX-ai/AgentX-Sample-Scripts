@@ -8,6 +8,11 @@ scope gets scored automatically in the background as it's ingested, nothing in t
 code changes to make this happen, sending the trace is enough.
 """
 
+# NOTE: since the judge-scorer unification, the preferred surface for everything in
+# this script IS client.monitor.judge_scorers (one entity: rubric + offline + online config).
+# profiles) - see 15_unified_judge_scorer.py. The surfaces used below keep working.
+
+
 import json
 import os
 import time
@@ -37,24 +42,17 @@ oai = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 patch_openai_client(oai, client.tracer)
 
 
-# --- Step 1: a standalone grading config (the rubric the evaluator will score against) -----------
-settings = client.evaluations.settings.builder(
-    name="Production Quality Bar",
-    acceptance_criteria="Accurate, on-topic, doesn't dodge the question.",
-    rejection_criteria="Off-topic, refuses without explanation, or contradicts the support policy.",
-).publish()
-print(f"Published grading config: {settings.id}")
-
-
-# --- Step 2: the Online Evaluator itself -----------------------------------------------------
+# --- Step 1+2: ONE LLM Judge Scorer, rubric and live scoring in the same call ----------------
 # sample_rate=1.0 so every matching trace gets scored, for a demo that doesn't depend on timing.
 # In production you'd typically sample (e.g. 0.1) to control judge-call cost/volume.
-evaluator = client.monitor.online_evaluators.builder(
-    name="Production Quality Bar",
-    evaluation_settings_id=settings.id,
+evaluator = client.monitor.judge_scorers.builder(
+    "Production Quality Bar",
+    acceptance_criteria="Accurate, on-topic, doesn't dodge the question.",
+    rejection_criteria="Off-topic, refuses without explanation, or contradicts the support policy.",
+    live=True,
     sample_rate=1.0,
 ).publish()
-print(f"Created Online Evaluator: {evaluator.id} ({evaluator.name})")
+print(f"Created judge scorer with live scoring on: {evaluator.id} ({evaluator.name})")
 
 
 # --- Step 3: send some "live" traffic, a deliberate mix of good and bad answers ------------------
@@ -136,26 +134,28 @@ client.tracer.flush(timeout=10)
 # Scoring runs asynchronously right after ingest, same as Monitor's pattern detection: poll
 # instead of expecting results immediately.
 print("\nWaiting for the Online Evaluator to finish scoring...")
+# Wait until MOST of the demo traffic is scored (6 traces sent above), not just the first
+# verdict - stopping at one trace made the "bad answer raises a signal" half invisible.
 points = []
-for attempt in range(10):
+for attempt in range(20):
     time.sleep(3)
-    points = [p for p in client.monitor.online_evaluators.ratings(evaluator.id, window="24h") if p.count > 0]
-    if points:
+    points = [p for p in client.monitor.judge_scorers.ratings(evaluator.id, window="24h") if p.count > 0]
+    if sum(p.count for p in points) >= 4:
         break
-    print(f"  ...not yet (attempt {attempt + 1}/10)")
+    print(f"  ...{sum(p.count for p in points)} scored (attempt {attempt + 1}/20)")
 
 if points:
     total_count = sum(p.count for p in points)
     weighted_avg = sum((p.average_rating or 0) * p.count for p in points) / total_count
     print(f"\nScored {total_count} traces so far, average rating: {weighted_avg:.2f} / 10")
 
-    events = client.monitor.online_evaluators.events(evaluator.id, window="24h")
+    events = client.monitor.judge_scorers.events(evaluator.id, window="24h")
     print(f"\nWorst-rated traces ({len(events)}):")
     for event in events[:3]:
         print(f"  [{event.rating:.1f}/10] {event.input!r} -> {event.output!r}")
 
     print(
-        "\nCheck Governance > Monitor > Online Evaluators in the dashboard for the full breakdown, "
+        "\nCheck the Scorers page in the dashboard for the full breakdown, "
         "the same events list above is exactly the evidence "
         "05_prompt_registry_autotune_loop.py pulls into its rewrite proposal."
     )

@@ -7,7 +7,7 @@ it as a new version.
 For the basics (register once, use prompt.text as your agent's real system prompt, tag a run) see
 ../sdk_eval_samples/prompt_registry_example.py, that one stops at "click Propose improvement in
 the dashboard." This one calls /propose itself and shows the merged evidence feed behind it. The
-Online Evaluator below uses client.monitor.online_evaluators (real SDK support); /examples and
+judge below uses client.monitor.judge_scorers (the unified scorer surface); /examples and
 /propose don't have a dedicated SDK method yet (dashboard-only today), so those two calls use
 `requests` directly against the same REST API the dashboard calls.
 
@@ -131,15 +131,11 @@ print("Eval run tagged and scored.")
 
 
 # --- Step 3: Online Evaluator evidence (production traffic, not a curated dataset) ---------------
-settings = client.evaluations.settings.builder(
-    name="Prompt Autotune Demo Production Bar",
+evaluator = client.monitor.judge_scorers.builder(
+    "Prompt Autotune Demo Evaluator",
     acceptance_criteria="Empathetic, grounded in a real policy, offers a concrete next step.",
     rejection_criteria="Curt, generic, or invents a policy that wasn't stated.",
-).publish()
-
-evaluator = client.monitor.online_evaluators.builder(
-    name="Prompt Autotune Demo Evaluator",
-    evaluation_settings_id=settings.id,
+    live=True,
     sample_rate=1.0,
 ).publish()
 

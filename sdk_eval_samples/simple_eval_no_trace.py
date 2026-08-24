@@ -8,7 +8,6 @@ from agentx import AgentX
 from agentx.evaluations.models import (
     Dataset,
     EvaluationCase,
-    EvaluationSettings,
     Report,
 )
 from agentx.evaluations.runner import EvaluationRunContext
@@ -80,12 +79,12 @@ def support_agent(case: EvaluationCase) -> Dict[str, Any]:
     }
 
 
-evaluation_settings_id: str = ""  # replace with eval config id to reuse an existing one
-if not evaluation_settings_id:
-    # No id above is portable across installs, so this always builds a fresh config when unset -
-    # in practice you'd usually reuse an existing evaluation_settings_id across many runs.
-    evaluation_settings: EvaluationSettings = client.evaluations.settings.builder(
-        name="two runs - Strict",
+scorer_id: str = ""  # replace with a judge scorer id to reuse an existing one
+if not scorer_id:
+    # No id above is portable across installs, so this always builds a fresh scorer when unset -
+    # in practice you'd usually reuse an existing scorer_id across many runs.
+    scorer = client.monitor.judge_scorers.builder(
+        "two runs - Strict",
         number_of_requests=2,
         acceptance_criteria="Accurate, concise, grounded in the support policy.",
         rejection_criteria="No hallucinated policies or made-up steps.",
@@ -94,9 +93,9 @@ if not evaluation_settings_id:
         bleu_score=True,
         rouge_score=True,
     ).publish()
-    evaluation_settings_id = evaluation_settings.id
+    scorer_id = scorer.id
 
-print(f"Published evaluation settings: {evaluation_settings_id}")
+print(f"Published judge scorer: {scorer_id}")
 
 # Each step's return type is annotated explicitly: .execute()/.finalize() both return
 # EvaluationRunContext (no scores yet - those need scoring+analysis first); only .analyze()
@@ -111,7 +110,7 @@ run_context: EvaluationRunContext = (
             "displayName": "GPT-4o-mini Support Agent",
             "framework": "openai",
         },
-        evaluation_settings_id=evaluation_settings_id,
+        scorer_id=scorer_id,
     )
     .execute(support_agent)
     .finalize()
