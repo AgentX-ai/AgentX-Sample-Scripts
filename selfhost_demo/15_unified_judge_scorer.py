@@ -5,7 +5,7 @@ Before the unification, "Evaluator configs" (offline grading) and "online evalua
 scoring) were two entities sharing a rubric by reference. Now they are ONE scorer:
 
   - judge:   the rubric (criteria, judge prompt, judge model)
-  - offline: how dataset runs grade with it (its id IS the evaluation_settings_id runs take)
+  - offline: how dataset runs grade with it (its id IS the scorer_id runs take)
   - online:  whether/how it scores live traffic (sampling, scope, alert threshold)
 
 This script creates one scorer, uses the SAME id to grade an offline dataset run and to score
@@ -29,15 +29,15 @@ client = AgentX(api_key=project["apiKey"], base_url=BASE_URL)
 client.ping()
 
 # --- 1. One scorer, both profiles, one call --------------------------------------------------
-scorer = client.monitor.judge_scorers.create(
+# The snake_case builder assembles all three sections in one call (a dict-based
+# judge_scorers.create(judge=..., offline=..., online=...) exists too, camelCase wire keys).
+scorer = client.monitor.judge_scorers.builder(
     "Support answer quality",
-    judge={
-        "acceptanceCriteria": "Concrete, correct, and cites the documented policy.",
-        "rejectionCriteria": "Vague, hedging, or contradicts the policy.",
-    },
-    offline={"numberOfRequests": 1, "jaccardSimilarity": {"enabled": True}},
-    online={"enabled": True, "sampleRate": 1.0, "alertThreshold": 6, "severity": "medium"},
-)
+    acceptance_criteria="Concrete, correct, and cites the documented policy.",
+    rejection_criteria="Vague, hedging, or contradicts the policy.",
+    jaccard_similarity=True,
+    live=True, sample_rate=1.0, alert_threshold=6, severity="medium",
+).publish()
 print(f"scorer: {scorer.id} | online profile: {scorer.online_profile_id}")
 
 # --- 2. The SAME id grades an offline dataset run --------------------------------------------
@@ -51,7 +51,7 @@ run = (
     client.evaluations.run(
         dataset_id=dataset.id,
         subject={"kind": "custom_agent", "framework": "raw_python"},
-        evaluation_settings_id=scorer.id,  # <- the scorer IS the grading config
+        scorer_id=scorer.id,  # <- the scorer IS the grading config
     )
     .execute(lambda case: "You have 30 days from delivery for a full refund on most items.")
     .finalize()
@@ -64,7 +64,7 @@ with client.tracer.trace("support-agent", input={"q": "return window?"}, sync=Tr
     span.output = "Our policy is generous, please check the website for details."  # vague -> low
 time.sleep(3)
 events = client.monitor.judge_scorers.events(scorer.id, window="24h")
-print(f"live checks recorded: {events.get('totalCount', len(events.get('events', [])))}")
+print(f"live checks recorded: {len(events)}")
 
 # --- 4. Sparse updates: pause live scoring without touching the rubric -----------------------
 paused = client.monitor.judge_scorers.update(scorer.id, online={"enabled": False})

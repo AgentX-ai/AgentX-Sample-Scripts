@@ -207,15 +207,16 @@ def support_agent(case: EvaluationCase) -> Dict[str, Any]:
 # --- Step 3: standalone grading config -----------------------------------------------------------
 # A reusable rubric independent of the dataset's own twin config, reuse this same settings id
 # across other datasets/runs instead of rebuilding it each time. number_of_requests here takes
-# precedence over the dataset's own value once evaluation_settings_id is passed to .run() below, so
+# precedence over the dataset's own value once scorer_id is passed to .run() below, so
 # this is what actually controls repetitions per question, not the builder call above.
 #
 # code_scorers: sandboxed JS run per result alongside the LLM judge and similarity metrics.
 # "conciseness" below is the kind of check that's awkward to express as a similarity metric or a
 # judge rubric, but trivial as a few lines of code: a hard word-count cutoff, checked exactly the
 # same way on every run.
-evaluation_settings = client.evaluations.settings.builder(
-    name="Support Agent Strict Grading",
+# The unified LLM Judge Scorer surface: one entity whose id doubles as the run's scorer_id.
+grading_scorer = client.monitor.judge_scorers.builder(
+    "Support Agent Strict Grading",
     number_of_requests=2,
     acceptance_criteria="Accurate, concise, grounded in the stated policy.",
     rejection_criteria="Dismissive, ignores the question, or invents a policy.",
@@ -237,8 +238,8 @@ evaluation_settings = client.evaluations.settings.builder(
         }
     ],
 ).publish()
-evaluation_settings_id = evaluation_settings.id
-print(f"Published grading config: {evaluation_settings_id}")
+scorer_id = grading_scorer.id
+print(f"Published judge scorer: {scorer_id}")
 
 
 # --- Step 4: run and score --------------------------------------------------------------------
@@ -246,7 +247,7 @@ run_context: EvaluationRunContext = (
     client.evaluations.run(
         dataset_id=dataset.id,
         subject={"kind": "custom_agent", "displayName": "Support Agent (demo)", "framework": "openai"},
-        evaluation_settings_id=evaluation_settings_id,
+        scorer_id=scorer_id,
     )
     .execute(support_agent)
     .finalize()

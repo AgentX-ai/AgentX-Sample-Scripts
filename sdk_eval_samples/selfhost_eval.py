@@ -1,7 +1,7 @@
 # pip install agentx-python
 #
 # Minimal self-host evaluation: build a dataset, grade it with a unified LLM Judge Scorer
-# (the scorer's id IS the evaluation_settings_id a run takes), and link every result to its
+# (the scorer's id IS the scorer_id a run takes), and link every result to its
 # trace. Point AGENTX_SELFHOST_BASE_URL/AGENTX_API_KEY at your engine - nothing is hardcoded.
 import os
 import time
@@ -50,7 +50,7 @@ run = (
     client.evaluations.run(
         dataset_id=dataset.id,
         subject={"kind": "custom_agent", "displayName": "my-agent"},
-        evaluation_settings_id=scorer.id,  # the scorer IS the grading config
+        scorer_id=scorer.id,  # the scorer IS the grading config
     )
     .execute(my_agent)
     .finalize()

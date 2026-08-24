@@ -85,17 +85,13 @@ chain = (
 # "high" because irrelevant retrieval is the failure this corpus actually has.
 # ---------------------------------------------------------------------------
 
-context_relevancy = next(
-    s for s in client.evaluations.settings.list() if s.name == "RAG: Context Relevancy"
+# The seeded template IS a judge scorer - switching its live scoring on is one sparse update.
+evaluator = next(s for s in client.monitor.judge_scorers.list() if s.name == "RAG: Context Relevancy")
+client.monitor.judge_scorers.update(
+    evaluator.id,
+    online={"enabled": True, "sampleRate": 1.0, "alertThreshold": 5, "severity": "high"},
 )
-evaluator = client.monitor.online_evaluators.builder(
-    name="RAG Context Relevancy (sample)",
-    evaluation_settings_id=context_relevancy.id,
-    sample_rate=1.0,
-    alert_threshold=5,
-    severity="high",
-).publish()
-print(f"Online evaluator {evaluator.id} referencing config '{context_relevancy.name}'")
+print(f"Live scoring enabled on seeded judge scorer '{evaluator.name}' ({evaluator.id})")
 
 handler = AgentXCallbackHandler(tracer=client.tracer, name="rag-support-agent")
 question = "Does the espresso machine come with a warranty?"
@@ -107,7 +103,7 @@ client.tracer.flush(timeout=10)
 # Wait for the ingest-time judgment, then show the rating and the Signal it raised.
 events = []
 for _ in range(30):
-    events = client.monitor.online_evaluators.events(evaluator.id, window="24h")
+    events = client.monitor.judge_scorers.events(evaluator.id, window="24h")
     if events:
         break
     time.sleep(3)
@@ -119,5 +115,5 @@ for signal in client.monitor.signals.list(severity="high", limit=10):
     if evaluator.name in signal.summary:
         print(f"\nSIGNAL: {signal.severity} | {signal.summary[:200]}")
 
-client.monitor.online_evaluators.update(evaluator.id, enabled=False)
-print(f"\nPaused evaluator {evaluator.id} - re-enable it in Monitor -> Online Evaluators")
+client.monitor.judge_scorers.update(evaluator.id, online={"enabled": False})
+print(f"\nPaused live scoring on {evaluator.id} - re-enable it on the Scorers page")

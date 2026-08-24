@@ -27,7 +27,7 @@ from dotenv import load_dotenv
 
 from agentx import AgentX
 from agentx.integrations.langchain import AgentXCallbackHandler
-from agentx.evaluations.models import Dataset, EvaluationCase, EvaluationSettings
+from agentx.evaluations.models import Dataset, EvaluationCase
 from agentx.evaluations.runner import EvaluationRunContext
 
 load_dotenv()
@@ -104,8 +104,8 @@ dataset: Dataset = (
 )
 dataset_id = dataset.id
 
-eval_settings: EvaluationSettings = client.evaluations.settings.builder(
-    name="Billing Dispute Investigation Eval Config",
+eval_scorer = client.monitor.judge_scorers.builder(
+    "Billing Dispute Investigation Eval Config",
     number_of_requests=1,
     acceptance_criteria=(
         "Warm, concise, and factual: explains what was found and what was done, references the "
@@ -117,7 +117,7 @@ eval_settings: EvaluationSettings = client.evaluations.settings.builder(
         "no exposing internal risk/eligibility scoring."
     ),
 ).publish()
-eval_settings_id = eval_settings.id
+eval_scorer_id = eval_scorer.id
 
 
 def billing_dispute_agent(case: EvaluationCase) -> Dict[str, Any]:
@@ -142,7 +142,7 @@ run_context: EvaluationRunContext = (
             "framework": "langchain",
             "runtime": "local",
         },
-        evaluation_settings_id=eval_settings_id,
+        scorer_id=eval_scorer_id,
     )
     .execute(billing_dispute_agent)
     .finalize()

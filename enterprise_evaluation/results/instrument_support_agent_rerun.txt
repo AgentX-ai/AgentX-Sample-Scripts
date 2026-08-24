@@ -1,5 +1,5 @@
-time-to-first-trace: 0.00s
-turn1 trace: v6pz8XcWdG_AcBVC0YucH  turn2 trace: Es1pg1oofhVz9pSWN8_9W
+time-to-first-trace: 0.01s
+turn1 trace: 8VaZ0QFL7fXakKPT-fgrC  turn2 trace: rUmz45l9EJzZnu8_XP0xD
 session spans recorded: 4 (expect 2 roots, tool calls recorded on them)
   name=buyer-support-agent model=gpt-4o-mini latencyMs=0 toolCalls=1 err=False
   name=lookup_order model=None latencyMs=0 toolCalls=0 err=False

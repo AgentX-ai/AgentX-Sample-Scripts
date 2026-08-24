@@ -6,7 +6,7 @@ cross-project leakage of A's content into B: 0 (expect 0)
 redaction fields advertised by monitoring defaults: 0 (expect 0 - no placebo knobs)
 
 === 7.3 ingest throughput (100 sequential root traces) ===
-sequential ingest: p50=1.2ms p95=1.8ms max=7.0ms (~848 req/s single-writer)
+sequential ingest: p50=1.8ms p95=2.7ms max=13.4ms (~571 req/s single-writer)
 
 === 7.4 auth-enabled mode (second engine on :4792) ===
 auth config: {"mode":"enabled","needsSetup":true,"socialProviders":[],"emailEnabled":false,"verificationRequired":false}
@@ -14,6 +14,6 @@ anonymous /projects with auth enabled: HTTP 401 (expect 401)
 key handout in enabled mode: 0 (expect 0 - no anonymous credentials)
 
 === 7.5 credential rate limit (default 120/min, AGENTX_RATE_LIMIT_CREDENTIAL tunable) ===
-429s within 130 rapid credential-route calls: 18 (expect >0 once the 120/min window fills)
+429s within 130 rapid credential-route calls: 27 (expect >0 once the 120/min window fills)
 
 UC7 complete - interpret results against FINDINGS.md

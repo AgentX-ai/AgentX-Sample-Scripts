@@ -1,11 +1,65 @@
-dataset: CoTKdbHU_i9C5qB4l8gap
+dataset: ToEW50_j4C1RZmfD1WqNm
 
 === healthy build (expect exit 0) ===
-  buyer-gate-healthy: exit=0 avg_rating=10.00 jaccard_avg=0.65 wall=6.7s cases=4
+────────────────────────────────────────────────────────────
+  AgentX Evaluation   -   Buyer Gate - Support Policy v1
+────────────────────────────────────────────────────────────
+  Run   : kmlbG-NFrrstLbu6l2cWU
+
+Executing  4 questions × 1 run
+  ✓  [1/4] Q1 run #1  What's your return window?  0ms
+  ✓  [2/4] Q2 run #1  Do you ship internationally?  0ms
+  ✓  [3/4] Q3 run #1  How do I cancel my subscription?  0ms
+  ✓  [4/4] Q4 run #1  Can I get an invoice with my company VAT number?  0ms
+  Scoring - AI is rating 4 results...
+  ✓  Scored 4 results
+
+  Finalizing - submitting results...
+  ✓  Finalized
+
+  ✓  [fail-under] Average rating 10 >= floor 7
+  ✓  GATE PASSED
+  buyer-gate-healthy: exit=0 avg_rating=10.00 jaccard_avg=0.65 wall=6.9s cases=4
 === healthy build again (judge variance probe) ===
-  buyer-gate-healthy-2: exit=0 avg_rating=10.00 jaccard_avg=0.65 wall=6.1s cases=4
+────────────────────────────────────────────────────────────
+  AgentX Evaluation   -   Buyer Gate - Support Policy v1
+────────────────────────────────────────────────────────────
+  Run   : _73Gg02_dslr9bJF6WkPo
+
+Executing  4 questions × 1 run
+  ✓  [1/4] Q1 run #1  What's your return window?  0ms
+  ✓  [2/4] Q2 run #1  Do you ship internationally?  0ms
+  ✓  [3/4] Q3 run #1  How do I cancel my subscription?  0ms
+  ✓  [4/4] Q4 run #1  Can I get an invoice with my company VAT number?  0ms
+  Scoring - AI is rating 4 results...
+  ✓  Scored 4 results
+
+  Finalizing - submitting results...
+  ✓  Finalized
+
+  ✓  [fail-under] Average rating 10 >= floor 7
+  ✓  GATE PASSED
+  buyer-gate-healthy-2: exit=0 avg_rating=10.00 jaccard_avg=0.65 wall=6.4s cases=4
 === regressed build (expect exit 1) ===
-  buyer-gate-regressed: exit=1 avg_rating=0.25 jaccard_avg=0.00 wall=7.7s cases=4
+────────────────────────────────────────────────────────────
+  AgentX Evaluation   -   Buyer Gate - Support Policy v1
+────────────────────────────────────────────────────────────
+  Run   : mx_U5DCgqMDQ-7Q8Z8-3s
+
+Executing  4 questions × 1 run
+  ✓  [1/4] Q1 run #1  What's your return window?  0ms
+  ✓  [2/4] Q2 run #1  Do you ship internationally?  0ms
+  ✓  [3/4] Q3 run #1  How do I cancel my subscription?  0ms
+  ✓  [4/4] Q4 run #1  Can I get an invoice with my company VAT number?  0ms
+  Scoring - AI is rating 4 results...
+  ✓  Scored 4 results
+
+  Finalizing - submitting results...
+  ✓  Finalized
+
+  ✗  [fail-under] Average rating 0.25 < floor 7
+  ✗  GATE FAILED
+  buyer-gate-regressed: exit=1 avg_rating=0.25 jaccard_avg=0.00 wall=8.0s cases=4
 
 judge variance across identical runs: 0.00 rating points
 UC2 PASS

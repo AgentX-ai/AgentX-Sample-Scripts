@@ -1,6 +1,6 @@
-session grouped: 3 turns under buyer-session-1787501493
-coherence: 4/10 across 3 spans
-justification: The agent correctly retained Priya's name and order number at step 0, provided a delivery update, and applied the concierge instruction at s
+session grouped: 3 turns under buyer-session-1787563276
+coherence: 3/10 across 3 spans
+justification: The session initially established and used Priya's order number consistently: it provided a delivery update for order 4471 and confirmed the
 drift span identified: True
 
 UC6 PASS
