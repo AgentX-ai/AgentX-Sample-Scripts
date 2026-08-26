@@ -37,7 +37,6 @@ it reads the same active span.
 import json
 import os
 
-import requests
 from dotenv import load_dotenv
 from openai import OpenAI
 from agentx import AgentX
