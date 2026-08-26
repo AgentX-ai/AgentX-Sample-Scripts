@@ -1,10 +1,10 @@
-dataset: ToEW50_j4C1RZmfD1WqNm
+dataset: yhx0DcLN16KMODwhX_4tt
 
 === healthy build (expect exit 0) ===
 ────────────────────────────────────────────────────────────
   AgentX Evaluation   -   Buyer Gate - Support Policy v1
 ────────────────────────────────────────────────────────────
-  Run   : kmlbG-NFrrstLbu6l2cWU
+  Run   : Ffy2guE-MyqiVKJNr1oBR
 
 Executing  4 questions × 1 run
   ✓  [1/4] Q1 run #1  What's your return window?  0ms
@@ -19,12 +19,12 @@ Executing  4 questions × 1 run
 
   ✓  [fail-under] Average rating 10 >= floor 7
   ✓  GATE PASSED
-  buyer-gate-healthy: exit=0 avg_rating=10.00 jaccard_avg=0.65 wall=6.9s cases=4
+  buyer-gate-healthy: exit=0 avg_rating=10.00 jaccard_avg=0.65 wall=7.1s cases=4
 === healthy build again (judge variance probe) ===
 ────────────────────────────────────────────────────────────
   AgentX Evaluation   -   Buyer Gate - Support Policy v1
 ────────────────────────────────────────────────────────────
-  Run   : _73Gg02_dslr9bJF6WkPo
+  Run   : 8qH8_qG7BTEkWucLT5a6M
 
 Executing  4 questions × 1 run
   ✓  [1/4] Q1 run #1  What's your return window?  0ms
@@ -39,12 +39,12 @@ Executing  4 questions × 1 run
 
   ✓  [fail-under] Average rating 10 >= floor 7
   ✓  GATE PASSED
-  buyer-gate-healthy-2: exit=0 avg_rating=10.00 jaccard_avg=0.65 wall=6.4s cases=4
+  buyer-gate-healthy-2: exit=0 avg_rating=10.00 jaccard_avg=0.65 wall=6.2s cases=4
 === regressed build (expect exit 1) ===
 ────────────────────────────────────────────────────────────
   AgentX Evaluation   -   Buyer Gate - Support Policy v1
 ────────────────────────────────────────────────────────────
-  Run   : mx_U5DCgqMDQ-7Q8Z8-3s
+  Run   : dQvmJt7OH9ym_oQ0TRzpB
 
 Executing  4 questions × 1 run
   ✓  [1/4] Q1 run #1  What's your return window?  0ms
@@ -57,9 +57,9 @@ Executing  4 questions × 1 run
   Finalizing - submitting results...
   ✓  Finalized
 
-  ✗  [fail-under] Average rating 0.25 < floor 7
+  ✗  [fail-under] Average rating 0.5 < floor 7
   ✗  GATE FAILED
-  buyer-gate-regressed: exit=1 avg_rating=0.25 jaccard_avg=0.00 wall=8.0s cases=4
+  buyer-gate-regressed: exit=1 avg_rating=0.50 jaccard_avg=0.00 wall=8.5s cases=4
 
 judge variance across identical runs: 0.00 rating points
 UC2 PASS
