@@ -2,4 +2,4 @@
 .venv
 **/__pycache__
 .mypy_cache
-enterprise_evaluation/
+enterprise_evaluation

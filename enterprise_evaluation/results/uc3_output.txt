@@ -1,8 +1,0 @@
-signals with zero scorers enabled: 0 (expect 0)
-code scorer created: OUS4fqIm9pAD3C3lFCcrI kind=code
-secrets signals: 1 row(s), occurrences=3 (expect 1 row x3)
-code scorer signals: 1 - "apology overload" scored this response 0.00, below the 0.50 alert thr
-KPIs: totalRuns=14 failureRate=0.21 scorerFailing=3
-code scorer event history: 13 scored checks (metadata retained: True)
-
-UC3 PASS
