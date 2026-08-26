@@ -1,6 +1,0 @@
-manifest entities: 15; traces=6 feedback=1 outcomes=2
-dump: 6 traces, 1 feedback, 2 outcomes; markers intact: 6/6
-restore: 6 traces replayed, markers 6/6, sessions preserved: 1
-incremental: since-future=0 (expect 0), since-past=6 (expect 6)
-
-UC8 PASS
