@@ -156,8 +156,12 @@ if root:
         if s.get("spanKind") == "retrieval":
             print(f"  from {s['name']}: {str(s.get('output'))[:80]}")
 
-print(f"\nOpen the trace in Governance -> Observe to see each kind in the Execution Timeline,")
-print(f"one colour and one filter pill per kind: {BASE_URL.replace('/api/v1', '')}/governance?tab=observe")
+# The traces live in the project this script created, not in Default - switch the project
+# picker (top left) to it, or Observe will look empty.
+print(f"\nTo see each kind in the Execution Timeline (one colour and one filter pill per kind):")
+print(f"  1. open {BASE_URL.replace('/api/v1', '')}/governance?tab=observe")
+print(f"  2. switch the project picker (top left) to \"{project['name']}\"")
+print(f"  3. open either trace")
 
 if failures:
     print("\nFAILED:")
