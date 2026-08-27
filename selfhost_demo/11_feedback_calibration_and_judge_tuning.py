@@ -166,10 +166,14 @@ print(f"Verdict: {verdict['verdict'].upper()} (net {verdict['netAgreementGain']:
 print(verdict["summary"])
 
 
-# --- Step 8: publish (human-gated) ----------------------------------------------------------
+# --- Step 8: publish (human-gated AND provenance-gated) -------------------------------------
+# The engine refuses an unvalidated publish, and a measured regression, unless force=True:
+# the validation verdict rides along and is stamped into the rubric's version history, so a
+# tuned-and-validated change is forever distinguishable from a hand edit.
 if PUBLISH:
-    client.monitor.judge_scorers.publish_tuning(evaluator.id, criteria)
-    print("\nPublished: the evaluator's config now carries the tuned criteria (version history keeps the old one).")
+    client.monitor.judge_scorers.publish_tuning(evaluator.id, criteria, validation=verdict)
+    print("\nPublished: the evaluator's config now carries the tuned criteria (version history keeps the old one,")
+    print(f"stamped with the validation verdict: {verdict['verdict']}).")
 else:
     print("\nPUBLISH=False, nothing was written. In the dashboard: Scorers page >")
     print("Judge Tuning Demo Evaluator > row menu > Tune judge - the same evidence, rewrite, and")
