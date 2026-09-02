@@ -103,7 +103,7 @@ print(f"Published dataset: {dataset.id}")
 
 # --- Step 4: run the evaluation, tagging it with the prompt name + version ----------------------
 # This is what makes the prompt registry's "worst rated examples" / "propose improvement" feature
-# (dashboard: Governance -> Evaluate -> Prompts) able to find this run afterward: the engine reads
+# (dashboard: Governance -> Manage -> Prompts) able to find this run afterward: the engine reads
 # subject.metadata.promptName off every evaluation run and matches it against each registered
 # prompt's name - no dedicated SDK field, just this one convention.
 run_context: EvaluationRunContext = (
@@ -135,7 +135,7 @@ if report.dashboard_url:
     print(f"Dashboard: {report.dashboard_url}")
 
 print(
-    "\nNext: open Governance -> Evaluate -> Prompts in the self-host dashboard, select "
+    "\nNext: open Governance -> Manage -> Prompts in the self-host dashboard, select "
     f'"{prompt.name}", and click "Propose improvement". The engine gathers every tagged run\'s '
     "worst-rated examples, asks an LLM judge to rewrite the prompt to fix the recurring issues, "
     "and shows you the diff - publishing it as a new version is a separate, explicit click. "

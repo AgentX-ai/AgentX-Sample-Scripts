@@ -44,7 +44,7 @@ runner = Runner(
     "google-support-agent", framework="google-adk", model="gemini-3.5-flash"
 )
 async def run(query: str) -> str:
-    session = runner.session_service.create_session_sync(
+    session = await runner.session_service.create_session(
         app_name="support-app", user_id="user-1"
     )
     for event in runner.run(

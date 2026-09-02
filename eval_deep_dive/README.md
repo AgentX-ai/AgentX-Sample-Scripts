@@ -23,6 +23,6 @@ LLM key at all.
 - **Judge tuning** (propose -> validate -> publish): heavier judge spend than a sample should
   make on every run; `selfhost_demo/11_feedback_calibration_and_judge_tuning.py` covers it.
 - **The unified judge scorer entity itself**: `selfhost_demo/15_unified_judge_scorer.py`.
-- **The human review queue** (labels on unflagged traffic): dashboard/REST only today - there is
-  no `client.monitor.review_queue`, which is a known SDK gap tracked in
-  `../enterprise_evaluation/EVAL_DEEP_DIVE.md`.
+- **The human review queue** (labels on unflagged traffic): the SDK covers it as
+  `client.monitor.review_queue` (`list`/`queue`/`label`/`dismiss`), but no script here exercises
+  it - the dashboard's Review tab is the natural surface for hand-labelling.

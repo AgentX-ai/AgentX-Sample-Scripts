@@ -1,4 +1,6 @@
+import asyncio
 import os
+
 import requests
 from dotenv import load_dotenv
 from agentx import AgentX
@@ -58,8 +60,8 @@ runner = Runner(
     ],
 )
 
-session = runner.session_service.create_session_sync(
-    app_name="support-app", user_id="user-1"
+session = asyncio.run(
+    runner.session_service.create_session(app_name="support-app", user_id="user-1")
 )
 for event in runner.run(
     user_id="user-1",

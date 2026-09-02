@@ -7,8 +7,8 @@ of `sample-scripts`), so you can jump straight to whichever one matches what you
 
 For per-framework SDK integration examples (LangChain/CrewAI/OpenAI/Anthropic/Google GenAI), see
 `../sdk_trace_samples/`, `../sdk_eval_samples/`, and `../sdk_monitor_samples/` - those also run
-against the local self-host engine by default (same zero-setup key bootstrap as here), they're
-just organized by framework rather than by governance feature.
+against the local self-host engine by default (same `.env` and `AGENTX_API_KEY` convention as
+here), they're just organized by framework rather than by governance feature.
 
 ### Before the demo
 
@@ -24,11 +24,13 @@ just organized by framework rather than by governance feature.
 2. **Set your `.env`** (in this `sample-scripts/` directory, shared with the rest of the repo):
    ```
    OPENAI_API_KEY=sk-...
+   AGENTX_API_KEY=agtx_local_...   # the "Default project API key" the engine prints at startup
    # AGENTX_SELFHOST_BASE_URL=http://localhost:4700/api/v1   # only if not using the default port
    ```
-   No `AGENTX_API_KEY` needed: every script fetches the local key automatically the same way the
-   dashboard does (self-host has no login step). `ANTHROPIC_API_KEY` is only needed if you also
-   want to demo model portability against a Claude candidate model (`07_trace_portability...`).
+   `AGENTX_API_KEY` is the key the engine prints on every boot (`Default project API key: ...`) -
+   self-host has no login step, so that log line is the whole key exchange. `ANTHROPIC_API_KEY` is
+   only needed if you also want to demo model portability against a Claude candidate model
+   (`07_trace_portability...`).
 
 3. **Run `01_health_check.py` first**, always. It confirms the engine is reachable, prints the
    dashboard URL, and fails fast with a clear fix if something's not running, better to find that
@@ -54,6 +56,7 @@ just organized by framework rather than by governance feature.
 | `14_user_feedback.py` | Three traced replies, three user votes (two up, one down with a comment): the downvote raises a User-feedback signal, the votes show as chips on the trace, and the Downvote rate KPI moves - no LLM key needed | "The vote button in your own app is the cheapest ground truth there is - one client.feedback.report() call triages the complaint, charts the rate, and calibrates every judge against real humans." |
 | `15_unified_judge_scorer.py` | One LLM Judge Scorer created with judge rubric + offline + online profiles in a single call: the same scorer id grades an offline dataset run (10/10), scores live traffic, then pauses online scoring with a sparse update that leaves the rubric untouched | "Evaluators and judge scorers used to be two things sharing a rubric by reference - now one entity with two setting profiles, one editor, one tuning loop." |
 | `16_span_kinds.py` | One RAG trace built from eight kinds of step (agent, guardrail, embedding, retrieval, reranker, chain, llm, tool, evaluator), read back through the SDK and checked - exits non-zero if the engine classified any of them wrong | "A span used to be classified by three readers that disagreed, and the timeline's last rule was 'everything else is a tool'. Now a span states its kind and every reader gets the same answer." |
+| `17_platform_chart.py` | Agents on four platforms (LangChain, CrewAI, OpenAI Agents, a custom in-house runner) plus one unlabeled trace, all reporting into one engine; reads the platform mix back via `client.monitor.metrics()` and exits non-zero if any platform is missing - no LLM key needed | "Platform agnostic means one pane of glass: every framework - including ones we've never heard of - lands on the same Monitor Platforms chart, and unlabeled traffic is never hidden, it's just 'Other'." |
 
 ### Notes
 
@@ -71,12 +74,13 @@ just organized by framework rather than by governance feature.
   `calibration`/`tune`/`validate_tuning`/`publish_tuning`, `sessions.coherence_check`,
   `agents`, `run_model_portability`), plus `client.ping()`, `client.feedback`, and
   `client.outcomes`.
-- **Custom Evaluators** (Governance → Monitor → Custom Evaluators) is a newer, related feature not
-  currently demoed by any script here: your own HTTP endpoint gets POSTed a sample of live traffic
-  and its `{matches, reason?, score?}` response decides whether a signal is raised, same shape as
-  Online Evaluators but judged by your own code instead of an LLM. Dashboard/REST-only for now
-  (`/agent-monitoring/custom-evaluators[/:id]`, plus a `/dry-run` endpoint for testing a URL before
-  saving it) - no `client.monitor.custom_evaluators` SDK method exists yet.
+- **Custom evaluators** (Governance → Scorers in the dashboard) are a related feature not demoed
+  by any script here: your own code - a sandboxed code scorer, or an HTTP endpoint you host - gets
+  a sample of live traffic, and its `{matches, reason?, score?}` response decides whether a signal
+  is raised, same shape as Online Evaluators but judged by your own code instead of an LLM. In the
+  SDK this is `client.monitor.scorers` (`create`/`create_external`/`update`/`events`/`dry_run`),
+  backed by the engine's `/agent-monitoring/custom-evaluators` routes;
+  `../monitor_ops/02_custom_scorers.py` exercises the whole surface.
 - `05_prompt_registry_autotune_loop.py` goes deeper than `../sdk_eval_samples/prompt_registry_example.py`.
   That one shows the basics (register a prompt, tag a run, use `prompt.text` as your system
   prompt) and stops at "click Propose improvement in the dashboard." This one actually calls

@@ -297,8 +297,8 @@ else:
 
 print(
     f"\nIn the dashboard: open the session's trace (Observe tab, session {SESSION_ID}) to see the "
-    "span tree with its Session Coherence card, Improve > Tool Schemas for the tool proposal, and "
-    "Improve > Prompts for the prompt loop."
+    "span tree with its Session Coherence card, Manage > Tools & MCPs for the tool proposal, and "
+    "Manage > Prompts for the prompt loop."
 )
 if not PUBLISH:
     print("PUBLISH=False, nothing was written. Set PUBLISH=True to publish both rewrites programmatically.")

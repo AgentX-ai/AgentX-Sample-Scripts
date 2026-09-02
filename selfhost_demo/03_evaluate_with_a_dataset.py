@@ -254,19 +254,19 @@ run_context: EvaluationRunContext = (
 )
 
 results = run_context.results()
-ratings = [r["rating"] for r in results if r.get("rating") is not None]
+ratings = [r.rating for r in results if r.rating is not None]
 
 print()
 if ratings:
     print(f"Average rating: {sum(ratings) / len(ratings):.2f} / 10  (across {len(ratings)} results)")
     print(f"Range:          {min(ratings):.1f} - {max(ratings):.1f}")
     for r in results:
-        print(f"  [{r['rating']:.0f}/10] {r['questionText']}")
-        print(f"          {r['justification']}")
+        print(f"  [{r.rating:.0f}/10] {r.question_text}")
+        print(f"          {r.justification}")
         # The conciseness code scorer runs alongside the LLM judge and similarity metrics, not
         # instead of them, each scorer's own failure (a throw, a timeout) would show up here as
         # score: null with an error instead of taking down the rest of this result's scores.
-        for cs in r.get("codeScorerResults") or []:
+        for cs in r.code_scorer_results or []:
             score = f"{cs['score']:.2f}" if cs.get("score") is not None else "null"
             detail = cs.get("error") or cs.get("reasoning") or ""
             print(f"          code scorer '{cs['name']}': {score}  {detail}")
@@ -274,8 +274,8 @@ if ratings:
         # result's "View trace" link in the dashboard resolves, the same full execution timeline
         # (every LLM call, every tool call, in order) 02_trace_your_agent.py explains, not just
         # the judge's summary of it.
-        if r.get("traceId"):
-            print(f"          trace_id: {r['traceId']}")
+        if r.trace_id:
+            print(f"          trace_id: {r.trace_id}")
 print(f"\nDashboard: {BASE_URL.removesuffix('/api/v1')}")
 
 print(
