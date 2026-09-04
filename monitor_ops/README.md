@@ -11,6 +11,7 @@ operations features. Each creates its own throwaway project.
 | `04_topics.py` | Project-level opt-in classification (`client.monitor.set_topics(True)`) turns raw traffic into named, counted themes readable via `client.monitor.topics()` |
 | `05_session_judge.py` | Whole conversations judged as conversations: a cross-turn contradiction drags the session score down with per-step findings; session-scoped evaluators are creatable from the SDK and never judge per turn at ingest |
 | `06_online_judge_cap.py` | `AGENTX_QUOTA_ONLINE_JUDGE_CALLS_PER_DAY` stops live judge spend exactly at the cap under a traffic burst, without ever blocking ingestion (self-skips unless the engine is started with the cap) |
+| `07_otel_ingest_scoring.py` | Pure OpenTelemetry ingestion (OTLP/HTTP, no AgentX SDK on the hot path) is first-class traffic: the exported span is judged by an online scorer, and the low verdict raises a Signal (needs `pip install opentelemetry-sdk opentelemetry-exporter-otlp-proto-http`); runs in its own scratch project - use the dashboard's project switcher to see the trace |
 
 Not covered on purpose: a per-model "sovereignty matrix" sample - the self-host engine does not
 yet persist per-result model grouping (plan task #109), so there is nothing real to verify;

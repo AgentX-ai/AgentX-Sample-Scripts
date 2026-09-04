@@ -136,6 +136,13 @@ print(
     f" | missed: {cal['missed']} (judge passed it, reality said bad)"
     f" | over-flagged: {cal['overFlagged']} (judge flagged it, reality said fine)"
 )
+# Raw agreement flatters a judge on imbalanced traffic (rubber-stamping 90%-fine traffic scores
+# 90%). alpha is the chance-corrected version - the engine withholds it (null) until enough
+# verdicts carry ground truth, which a short demo run like this won't reach.
+if cal["alpha"] is not None:
+    print(f"Chance-corrected: alpha {cal['alpha']:.2f} ({cal['alphaBand']})")
+else:
+    print(f"Chance-corrected alpha: pending - needs {cal['alphaMinItems']} labeled verdicts")
 for c in cal["disagreementCases"]:
     truth = c["groundTruth"]
     print(f"  [{truth['source']}] judge {c['rating']}/10 vs reality bad={truth['isBad']}: {(truth['detail'] or '')[:80]}")
