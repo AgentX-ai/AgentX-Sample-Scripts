@@ -96,7 +96,7 @@ def rag_agent(case):
 run = (
     client.evaluations.run(
         dataset_id=dataset.id,
-        evaluation_settings_id=faithfulness.id,
+        scorer_id=faithfulness.id,  # evaluation_settings_id still works as a legacy alias
         subject={"kind": "custom_agent", "displayName": "rag-demo-offline"},
     )
     .execute(rag_agent)

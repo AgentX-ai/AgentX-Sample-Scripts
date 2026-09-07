@@ -1,11 +1,12 @@
 # Eval deep dive
 
-Six scripts that exercise AgentX's evaluation surface - offline and online - and **assert** the
-behaviour rather than demoing it. Every script creates its own project, prints one `OK`/`BAD`
-line per claim, and exits non-zero on any failure, so the whole folder doubles as an acceptance
-suite for the eval features. `run_all.sh` runs them in order.
+Ten scripts that exercise AgentX's evaluation surface - offline and online - and **assert** the
+behaviour rather than demoing it. Each prints one `OK`/`BAD` line per claim and exits non-zero
+on any failure, so the whole folder doubles as an acceptance suite for the eval features.
+Scripts 01-07 create their own throwaway project; 08-10 run in the key's own project.
+`run_all.sh` runs them in order.
 
-The engine needs a judge key (`OPENAI_API_KEY`) for 02, 04, 05 and 06. Scripts 01 and 03 are
+The engine needs a judge key (`OPENAI_API_KEY`) for 02 and 04-10. Scripts 01 and 03 are
 deliberately judge-free: everything they check is deterministic and works on an engine with no
 LLM key at all.
 
@@ -17,6 +18,10 @@ LLM key at all.
 | `04_pairwise_and_pytest.py` | Head-to-head judging between two runs (`both_orders`, flip rate measured, presentation alternated) and the two pytest claims a merge gate wants: `assert_evaluation` (the floor) and `assert_pairwise` (the comparison) - each shown passing what it should and failing what it should. |
 | `05_online_scoring.py` | The same scorer entity live on traffic: verdicts with reasoning per trace, a below-threshold score raising exactly one Signal, and a sparse pause that stops spend without touching the rubric. |
 | `06_judge_calibration_loop.py` | Is the judge itself right? Ops outcomes and user votes reported against judged traces; project calibration returns compared/agreement/false-negative rates, and a polished-but-wrong reply the judge believed surfaces as a false negative instead of disappearing. |
+| `07_multi_judge_scorers.py` | One agent execution, N verdicts: `additional_scorer_ids` grades every result with each extra scorer's own rubric (labeled per-row `judge_scorer_results`, per-run `scorerBreakdown`), and `gate(scorer="Safety")` fails the run on the named scorer's own average while the primary's gate passes. |
+| `08_weighted_final_score.py` | Code scorers run after the judges and metrics and receive `scores`, so one can blend them with custom per-entry weights and direction (a bad-quality judge contributes inverted) - verified by recomputing the blend from each row's own reported numbers. Runs in the default project, no throwaway project. |
+| `09_scorer_groups.py` | Scorer groups: mixed-kind scorers (judges + patterns + code/external) composed into one 0-10 score by reference, with weights and must-pass gates - grading a dataset run (`scorer_group_id`), zeroing on a tripped gate, and scoring live traffic (Signal below the group threshold + ratings history). |
+| `10_session_group_scoring.py` | Session-scope scorer groups: the group's online profile set to `scope: "session"` judges whole multi-turn conversations once idle - no per-trace double-judging, blended verdict in the session judge rail, a must-pass gate zeroing an apologetic session, a Signal below the threshold, and automatic re-scoring when the conversation grows. |
 
 ## What is deliberately not here
 

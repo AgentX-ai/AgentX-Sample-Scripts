@@ -25,8 +25,8 @@ OPENAI_API_KEY=sk-...                                    # for anything that mak
 | Directory | What it is |
 |---|---|
 | `selfhost_demo/` | 17 numbered demo scripts for showing the self-host engine live: trace, evaluate, monitor, prompt registry, CI gate, sessions, and more. Start here. |
-| `eval_deep_dive/` | Six assertion-style scripts (`OK`/`BAD` per claim, non-zero exit on failure) covering the offline and online evaluation surface. |
-| `monitor_ops/` | Six assertion-style scripts for monitoring operations: rules, custom scorers, webhooks, topics, session judging, judge-spend caps. |
+| `eval_deep_dive/` | Ten assertion-style scripts (`OK`/`BAD` per claim, non-zero exit on failure) covering the offline and online evaluation surface, including multi-judge runs and the named-scorer CI gate. |
+| `monitor_ops/` | Seven assertion-style scripts for monitoring operations: rules, custom scorers, webhooks, topics, session judging, judge-spend caps, OTel ingest scoring. |
 | `integration_tests/` | Verification for the Moveworks and Databricks pull importers in `agentx.integrations` (vendor APIs mocked, engine real). |
 | `enterprise_evaluation/` | A procurement-grade assessment of the framework: use-case scripts `uc1`-`uc10` plus the reports they back. |
 | `eval_fix_demo/` | A deliberately imperfect LangChain agent plus the eval loop that finds and measures its fixes. |

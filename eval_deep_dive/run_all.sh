@@ -5,7 +5,9 @@ set -euo pipefail
 cd "$(dirname "$0")"
 export AGENTX_EVAL_QUIET=1
 for script in 01_offline_lifecycle.py 02_grading_modes_and_analysis.py 03_agent_and_rag_checks.py \
-              04_pairwise_and_pytest.py 05_online_scoring.py 06_judge_calibration_loop.py; do
+              04_pairwise_and_pytest.py 05_online_scoring.py 06_judge_calibration_loop.py \
+              07_multi_judge_scorers.py 08_weighted_final_score.py 09_scorer_groups.py \
+              10_session_group_scoring.py; do
   echo "=== $script"
   python3 "$script"
 done
