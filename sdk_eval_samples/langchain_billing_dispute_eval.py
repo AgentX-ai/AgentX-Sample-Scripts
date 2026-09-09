@@ -66,43 +66,44 @@ handler = AgentXCallbackHandler(
 # than referencing a fixed hosted-platform id - investigate()'s own mock backend (customer,
 # subscription, invoice, refund ledger) is fixed for every call regardless of the case, only the
 # wording of the customer's message varies per case, see billing_dispute_agent's own comment below.
-dataset: Dataset = (
-    client.evaluations.datasets.builder(
-        name="Billing Dispute Investigation Eval",
-        description="Cases for the LangChain billing-dispute investigation agent.",
-        number_of_requests=1,
-        acceptance_criteria=(
-            "Warm, concise, and factual: explains what was found and what was done, references "
-            "the relevant policy in plain language, and never exposes internal reasoning, "
-            "confidence scores, or system details."
-        ),
-        rejection_criteria=(
-            "No invented policy details, no promising an outcome that contradicts the "
-            "investigation, no exposing internal risk/eligibility scoring."
-        ),
-    )
-    .add_case(
-        query=(
-            "I was charged $499 for an annual plan renewal yesterday, I tried to cancel one day "
-            "before the renewal, but the page wasn't working. Please refund and ensure I won't be "
-            "billed again!"
-        ),
-        expected_results=(
-            "Acknowledges the failed cancellation attempt, explains a refund was issued (or "
-            "escalated for review), confirms the subscription is canceled, and confirms auto-renew "
-            "is disabled."
-        ),
-    )
-    .add_case(
-        query="Why was I charged for a renewal when I'm sure I canceled in time?",
-        expected_results=(
-            "Investigates the cancellation timing against the renewal date before concluding, and "
-            "explains the outcome without blaming the customer."
-        ),
-    )
-    .publish()
-)
-dataset_id = dataset.id
+# dataset: Dataset = (
+#     client.evaluations.datasets.builder(
+#         name="Billing Dispute Investigation Eval",
+#         description="Cases for the LangChain billing-dispute investigation agent.",
+#         number_of_requests=1,
+#         acceptance_criteria=(
+#             "Warm, concise, and factual: explains what was found and what was done, references "
+#             "the relevant policy in plain language, and never exposes internal reasoning, "
+#             "confidence scores, or system details."
+#         ),
+#         rejection_criteria=(
+#             "No invented policy details, no promising an outcome that contradicts the "
+#             "investigation, no exposing internal risk/eligibility scoring."
+#         ),
+#     )
+#     .add_case(
+#         query=(
+#             "I was charged $499 for an annual plan renewal yesterday, I tried to cancel one day "
+#             "before the renewal, but the page wasn't working. Please refund and ensure I won't be "
+#             "billed again!"
+#         ),
+#         expected_results=(
+#             "Acknowledges the failed cancellation attempt, explains a refund was issued (or "
+#             "escalated for review), confirms the subscription is canceled, and confirms auto-renew "
+#             "is disabled."
+#         ),
+#     )
+#     .add_case(
+#         query="Why was I charged for a renewal when I'm sure I canceled in time?",
+#         expected_results=(
+#             "Investigates the cancellation timing against the renewal date before concluding, and "
+#             "explains the outcome without blaming the customer."
+#         ),
+#     )
+#     .publish()
+# )
+# dataset_id = dataset.id
+dataset_id = "oH6Q6PQjU2YK2qinPc3ol"
 
 eval_scorer = client.monitor.judge_scorers.builder(
     "Billing Dispute Investigation Eval Config",
@@ -130,7 +131,11 @@ def billing_dispute_agent(case: EvaluationCase) -> Dict[str, Any]:
     output, trace_id = investigate(
         user_message=case.query, client=client, handler=handler, sync=True
     )
-    return {"output": output, "metadata": {"framework": "langchain"}, "trace_id": trace_id}
+    return {
+        "output": output,
+        "metadata": {"framework": "langchain"},
+        "trace_id": trace_id,
+    }
 
 
 run_context: EvaluationRunContext = (
