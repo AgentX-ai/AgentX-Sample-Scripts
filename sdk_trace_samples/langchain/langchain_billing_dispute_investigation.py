@@ -47,7 +47,7 @@ handler = AgentXCallbackHandler(
 
 
 FAST_MODEL = "gpt-4o-mini"
-STRONG_MODEL = "gpt-5.5"
+STRONG_MODEL = "gpt-4o"
 
 
 # ------- mock data -------

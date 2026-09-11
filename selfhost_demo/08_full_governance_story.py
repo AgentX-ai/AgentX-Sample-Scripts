@@ -218,11 +218,7 @@ run_context = client.evaluations.run(
 ).execute(fixed_agent).finalize()
 
 for r in run_context.results():
-    # The agent's reply lives in the wire row's output.text - not yet a typed attribute,
-    # so it comes off row.raw (the modeled fields cover rating/question/trace).
-    raw_output = r.raw.get("output")
-    output_text = raw_output.get("text", "") if isinstance(raw_output, dict) else ""
-    print(f"  [{r.rating:.0f}/10] {r.question_text} -> {output_text[:80]!r}")
+    print(f"  [{r.rating:.0f}/10] {r.question_text} -> {(r.response or '')[:80]!r}")
 
 print(
     "\nFrom here: 04 shows this same quality bar applied continuously to live traffic (not just "

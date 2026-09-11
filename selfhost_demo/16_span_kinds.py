@@ -11,11 +11,12 @@ Nothing on the span said what it was. Now it can:
 
     span.child_span("jailbreak_check", span_kind="guardrail", ...)
 
-and `record_tool_call` / `record_retrieval` stamp their own kinds for you. The engine resolves
+and `record_tool_call` / `record_retrieval` stamp their own kinds for you, as do
+`record_memory` / `trace_memory` (span kind "memory"). The engine resolves
 each span's kind once, at ingest, and every reader - including the dashboard - reads that one
 answer. The old guessing survives only as a fallback for spans that say nothing.
 
-This script builds one realistic RAG trace using eight different kinds, reads every span back
+This script builds one realistic RAG trace using nine different kinds, reads every span back
 through the SDK, and CHECKS the engine's answers. It exits non-zero if any of them is wrong, so
 it is a verification you can run, not just a demo.
 
@@ -39,7 +40,7 @@ client.ping()
 
 SESSION_ID = f"span-kinds-{int(time.time())}"
 
-# --- 1. One trace, eight kinds of step -------------------------------------------------------
+# --- 1. One trace, nine kinds of step -------------------------------------------------------
 # The shape of a real RAG turn with a safety check on the front and a self-grade on the end.
 # Three ways a kind gets set, all shown here:
 #   - stated explicitly    -> child_span(..., span_kind="guardrail")

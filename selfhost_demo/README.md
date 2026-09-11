@@ -55,7 +55,7 @@ here), they're just organized by framework rather than by governance feature.
 | `13_conversation_simulation.py` | Two persona-driven simulated conversations against the same support prompt + schema-only tool: a cooperative customer ends GOAL ACHIEVED, an impatient one demanding proof gives up - both recorded as real sim-<id> sessions | "Multi-turn behavior tested before production traffic exists: write a persona and a goal, and the failure modes show up as ordinary sessions your whole monitoring stack already understands." |
 | `14_user_feedback.py` | Three traced replies, three user votes (two up, one down with a comment): the downvote raises a User-feedback signal, the votes show as chips on the trace, and the Downvote rate KPI moves - no LLM key needed | "The vote button in your own app is the cheapest ground truth there is - one client.feedback.report() call triages the complaint, charts the rate, and calibrates every judge against real humans." |
 | `15_unified_judge_scorer.py` | One LLM Judge Scorer created with judge rubric + offline + online profiles in a single call: the same scorer id grades an offline dataset run (10/10), scores live traffic, then pauses online scoring with a sparse update that leaves the rubric untouched | "Evaluators and judge scorers used to be two things sharing a rubric by reference - now one entity with two setting profiles, one editor, one tuning loop." |
-| `16_span_kinds.py` | One RAG trace built from eight kinds of step (agent, guardrail, embedding, retrieval, reranker, chain, llm, tool, evaluator), read back through the SDK and checked - exits non-zero if the engine classified any of them wrong | "A span used to be classified by three readers that disagreed, and the timeline's last rule was 'everything else is a tool'. Now a span states its kind and every reader gets the same answer." |
+| `16_span_kinds.py` | One RAG trace exercising nine of the eleven-kind span vocabulary (agent, guardrail, embedding, retrieval, reranker, chain, llm, tool, evaluator - `prompt` and `memory` round it out, and memory has its own demo in `../sdk_trace_samples/memory_span_demo.py`), read back through the SDK and checked - exits non-zero if the engine classified any of them wrong | "A span used to be classified by three readers that disagreed, and the timeline's last rule was 'everything else is a tool'. Now a span states its kind and every reader gets the same answer." |
 | `17_platform_chart.py` | Agents on four platforms (LangChain, CrewAI, OpenAI Agents, a custom in-house runner) plus one unlabeled trace, all reporting into one engine; reads the platform mix back via `client.monitor.metrics()` and exits non-zero if any platform is missing - no LLM key needed | "Platform agnostic means one pane of glass: every framework - including ones we've never heard of - lands on the same Monitor Platforms chart, and unlabeled traffic is never hidden, it's just 'Other'." |
 
 ### Notes
@@ -78,7 +78,7 @@ here), they're just organized by framework rather than by governance feature.
   by any script here: your own code - a sandboxed code scorer, or an HTTP endpoint you host - gets
   a sample of live traffic, and its `{matches, reason?, score?}` response decides whether a signal
   is raised, same shape as Online Evaluators but judged by your own code instead of an LLM. In the
-  SDK this is `client.monitor.scorers` (`create`/`create_external`/`update`/`events`/`dry_run`),
+  SDK this is `client.monitor.scorers` (`create_code`/`create_external`/`update`/`events`/`dry_run`),
   backed by the engine's `/agent-monitoring/custom-evaluators` routes;
   `../monitor_ops/02_custom_scorers.py` exercises the whole surface.
 - `05_prompt_registry_autotune_loop.py` goes deeper than `../sdk_eval_samples/prompt_registry_example.py`.
@@ -96,5 +96,8 @@ here), they're just organized by framework rather than by governance feature.
 - **Outcome reporting**: `client.outcomes.report(trace_id=..., outcome="reopened",
   is_negative=True)` feeds real after-the-fact results (a reopened ticket, a human confirmation)
   back against traces - the ground truth behind Overview's Judge Calibration card.
-- Self-host has no multi-tenant/workspace model, so there's no `WORKSPACE_ID` to set, unlike the
-  hosted-platform samples elsewhere in this repo.
+- The auth-disabled default these demos assume has no workspace to select, so there's no
+  `WORKSPACE_ID` to set, unlike the hosted-platform samples elsewhere in this repo. That's the
+  default posture, not a limit of the engine: `AGENTX_AUTH=enabled` adds accounts, and
+  `AGENTX_MULTI_TENANT=true` gives every signup its own organization with per-org keys - see
+  the Authentication page in the self-host docs.

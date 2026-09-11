@@ -6,7 +6,9 @@ each with a weight and an optional must-pass gate. The parts worth proving:
 - a dataset run graded by a group (scorer_group_id) gets the weighted blend in its rating
   column, recomputed here exactly from the member verdicts the row itself reports;
 - a matched failure pattern contributes 0, a clean one contributes 1 (polarity-mapped);
-- a must-pass gate zeroes the whole score when its member fails, whatever the blend says;
+- a must-pass gate zeroes the whole score when its member fails, whatever the blend says
+  (and fails CLOSED: a deleted non-gating member just degrades to "not scored", but a GATED
+  member that cannot score at all produces NO group score rather than a blend);
 - with an online profile, the SAME group scores sampled live traffic and raises a Signal
   below its alert threshold.
 
@@ -23,7 +25,6 @@ from agentx import AgentX
 load_dotenv()
 BASE_URL = os.getenv("AGENTX_SELFHOST_BASE_URL", "http://localhost:4700/api/v1")
 api_key = os.environ.get("AGENTX_API_KEY", "")
-bootstrap = AgentX(api_key=api_key, base_url=BASE_URL)
 client = AgentX(api_key=api_key, base_url=BASE_URL)
 client.ping()
 
@@ -186,6 +187,40 @@ check(
     "the group has a ratings history (chart endpoint)",
     any(p["count"] > 0 for p in ratings.get("points", [])),
 )
+
+# --- 5. Fail-closed: a GATED member that cannot score means NO score, not a blend -------------
+# Delete the pattern out from under the gated group, then re-grade. A deleted non-gating
+# member just renormalizes away; a deleted MUST-PASS member means the safety check never ran,
+# so the honest answer is no group score at all - never a blend that implies "passed".
+client.monitor.patterns.delete(pattern.id)
+failclosed_run = (
+    client.evaluations.run(
+        dataset_id=dataset.id,
+        subject={"kind": "custom_agent", "displayName": "group-demo"},
+        scorer_group_id=gated.id,
+    )
+    .execute(lambda case: "You have 30 days from delivery.")
+    .finalize()
+)
+fc_row = failclosed_run.results()[0]
+check(
+    "a gated member that cannot score produces NO group score",
+    fc_row.rating is None,
+    f"rating={fc_row.rating}",
+)
+check(
+    "justification names the unscoreable must-pass member",
+    "No score: must-pass member" in (fc_row.justification or ""),
+)
+
+# --- 6. Clean up: a leftover sampleRate-1 online group would keep judging every ingested
+# trace in this project on your own LLM key, forever. (The pattern is already gone - the
+# fail-closed check above consumed its deletion.)
+client.monitor.scorer_groups.delete(group.id)
+client.monitor.scorer_groups.delete(gated.id)
+client.monitor.judge_scorers.delete(generous.id)
+client.monitor.judge_scorers.delete(harsh.id)
+check("demo scorers cleaned up", True)
 
 print()
 if failures:

@@ -12,6 +12,11 @@ judge below uses client.monitor.judge_scorers (the unified scorer surface); /exa
 `requests` directly against the same REST API the dashboard calls.
 
 Set PUBLISH = True to actually publish the proposed rewrite as a new version at the end.
+
+Note on naming: this is the external-agent ANALOG of the hosted platform's Autotune - AgentX
+does not own your agent's code, so instead of branching/merging a config it proposes prompt
+registry versions you publish yourself (the dashboard calls this Suggest improvement / the
+Improvement Inbox).
 """
 
 import os

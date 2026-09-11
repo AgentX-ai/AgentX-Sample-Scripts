@@ -80,10 +80,17 @@ group = client.monitor.scorer_groups.create(
 check("group online profile is session-scoped", group.online and group.online.get("scope") == "session")
 
 # --- 2. Two multi-turn conversations, one resolved and one not --------------------------------
+# Unique per run: the session-scoped group sweeps EVERY idle multi-turn session in the
+# project (leftovers from earlier runs included), and signals dedupe per (group, agent) with
+# a last-write-wins summary - a shared agent name would let an older session's verdict
+# overwrite this run's summary between our sweep and our assertion.
+AGENT_NAME = f"support-agent-{stamp}"
+
+
 def converse(session_id, turns):
     for i, (q, a) in enumerate(turns):
         with client.tracer.trace(
-            "support-agent", input={"q": q}, session_id=session_id, sync=True
+            AGENT_NAME, input={"q": q}, session_id=session_id, sync=True
         ) as span:
             span.output = a
 
@@ -160,8 +167,9 @@ if good and bad:
 
 # --- 5. The low session score is a Signal, keyed on the group ---------------------------------
 signals = [
-    s for s in client.monitor.list_signals(polarity="all")
-    if s.pattern_key == kind and bad_session in (s.summary or "")
+    s
+    for s in client.monitor.list_signals(polarity="all")
+    if s.pattern_key == kind and s.type == "scorer_group_low_session_score" and bad_session in (s.summary or "")
 ]
 check("below-threshold session raised a group Signal", len(signals) >= 1)
 

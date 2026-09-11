@@ -30,7 +30,7 @@ OPENAI_API_KEY=sk-...                                    # for anything that mak
 | `integration_tests/` | Verification for the Moveworks and Databricks pull importers in `agentx.integrations` (vendor APIs mocked, engine real). |
 | `enterprise_evaluation/` | A procurement-grade assessment of the framework: use-case scripts `uc1`-`uc10` plus the reports they back. |
 | `eval_fix_demo/` | A deliberately imperfect LangChain agent plus the eval loop that finds and measures its fixes. |
-| `sdk_trace_samples/` | Per-framework tracing integrations: `langchain/`, `crewai/`, `openai_agent/`, `anthropic_agent/`, `google/`, plus a decorator sample and an OpenTelemetry sample. |
+| `sdk_trace_samples/` | Per-framework tracing integrations: `langchain/`, `crewai/`, `openai_agent/`, `anthropic_agent/`, `google/`, plus a decorator sample, an OpenTelemetry sample, and a memory-span demo. |
 | `sdk_eval_samples/` | Evaluation basics per framework, including `prompt_registry_example.py`. |
 | `sdk_monitor_samples/` | Monitoring/signal basics. |
 | `sdk_rag_samples/` | RAG-specific scoring: offline context match and faithfulness, online context relevancy and faithfulness. |
