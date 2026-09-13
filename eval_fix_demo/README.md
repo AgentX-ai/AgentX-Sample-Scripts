@@ -18,9 +18,10 @@ pip install -r ../requirements.txt   # includes langchain-anthropic
 ```
 
 The shared `../.env` needs `AGENTX_API_KEY`, `ANTHROPIC_API_KEY` for the agent, and
-`OPENAI_API_KEY` for the handbook embeddings. Set `AGENTX_API_BASE_URL` too if you are
-pointing at a local API instead of the hosted platform (for the self-host engine:
-`AGENTX_API_BASE_URL=http://localhost:4700/api/v1`).
+`OPENAI_API_KEY` for the handbook embeddings. If you are pointing at a local API instead of
+the hosted platform, set the base URL too - `run_eval.py` honors both
+`AGENTX_SELFHOST_BASE_URL=http://localhost:4700/api/v1` (the convention the other sample
+dirs use) and `AGENTX_API_BASE_URL` (which takes precedence when both are set).
 
 ### Run the agent
 

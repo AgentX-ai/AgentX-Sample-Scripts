@@ -144,62 +144,67 @@ evaluator = client.monitor.judge_scorers.builder(
     sample_rate=1.0,
 ).publish()
 
-# A real call against the same weak prompt, not a canned string, so this is genuinely the same
-# underperforming agent as the eval-run evidence above, just hitting it as live traffic instead of
-# a curated dataset. WEAK_PROMPT_TEXT has no policy grounding or empathy instruction at all, so a
-# real completion against it reliably scores low on the same criteria the eval run used.
-live_query = "Can I get a refund? I'm not happy."
-with client.tracer.trace(
-    "support-agent",
-    input={"query": live_query},
-    framework="openai",
-    model="gpt-4o-mini",
-    metadata={"promptName": prompt.name},
-) as span:
-    resp = oai.chat.completions.create(
+try:
+    # A real call against the same weak prompt, not a canned string, so this is genuinely the same
+    # underperforming agent as the eval-run evidence above, just hitting it as live traffic instead of
+    # a curated dataset. WEAK_PROMPT_TEXT has no policy grounding or empathy instruction at all, so a
+    # real completion against it reliably scores low on the same criteria the eval run used.
+    live_query = "Can I get a refund? I'm not happy."
+    with client.tracer.trace(
+        "support-agent",
+        input={"query": live_query},
+        framework="openai",
         model="gpt-4o-mini",
-        messages=[{"role": "system", "content": prompt.text}, {"role": "user", "content": live_query}],
-    )
-    span.output = resp.choices[0].message.content
+        metadata={"promptName": prompt.name},
+    ) as span:
+        resp = oai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "system", "content": prompt.text}, {"role": "user", "content": live_query}],
+        )
+        span.output = resp.choices[0].message.content
 
-client.tracer.flush(timeout=10)
-print(f"Sent a live trace tagged for this prompt (Online Evaluator will score it): {span.output!r}")
+    client.tracer.flush(timeout=10)
+    print(f"Sent a live trace tagged for this prompt (Online Evaluator will score it): {span.output!r}")
 
-time.sleep(6)  # scoring runs asynchronously right after ingest
-
-
-# --- Step 4: pull the merged evidence the judge will see ------------------------------------------
-examples = client.evaluations.prompts.examples(prompt.id)
-eval_run_count = sum(1 for ex in examples["examples"] if ex["source"] == "eval_run")
-online_eval_count = sum(1 for ex in examples["examples"] if ex["source"] == "online_evaluator")
-print(f"\nEvidence gathered: {examples['exampleCount']} example(s)")
-print(f"  scope: version-scoped={examples['scope']['versionScoped']}, window={examples['scope']['window']}")
-print(f"  sources: {eval_run_count} eval-run, {online_eval_count} online-evaluator")
-for ex in examples["examples"][:3]:
-    print(f"  [{ex['source']}] rating={ex['rating']}: {ex['input'][:60]!r} -> {ex['output'][:60]!r}")
+    time.sleep(6)  # scoring runs asynchronously right after ingest
 
 
-# --- Step 5: ask the judge to propose a rewrite ----------------------------------------------------
-proposal = client.evaluations.prompts.propose(prompt.id)
-print(f"\nProposed rewrite (based on {proposal['sourceBreakdown']['evalRun']} eval-run + "
-      f"{proposal['sourceBreakdown']['onlineEvaluator']} online-evaluator example(s)):")
-print(f"\n  {proposal['revisedText']}")
-print(f"\nReasoning: {proposal['reasoning']}")
+    # --- Step 4: pull the merged evidence the judge will see ------------------------------------------
+    examples = client.evaluations.prompts.examples(prompt.id)
+    eval_run_count = sum(1 for ex in examples["examples"] if ex["source"] == "eval_run")
+    online_eval_count = sum(1 for ex in examples["examples"] if ex["source"] == "online_evaluator")
+    print(f"\nEvidence gathered: {examples['exampleCount']} example(s)")
+    print(f"  scope: version-scoped={examples['scope']['versionScoped']}, window={examples['scope']['window']}")
+    print(f"  sources: {eval_run_count} eval-run, {online_eval_count} online-evaluator")
+    for ex in examples["examples"][:3]:
+        print(f"  [{ex['source']}] rating={ex['rating']}: {ex['input'][:60]!r} -> {ex['output'][:60]!r}")
 
 
-# --- Step 6: publish (or don't) -------------------------------------------------------------------
-if PUBLISH:
-    published = client.evaluations.prompts.publish_version(
-        prompt.id,
-        text=proposal["revisedText"],
-        reasoning=proposal["reasoning"],
-        based_on_version=prompt.version,
-    )
-    print(f"\nPublished as v{published['currentVersion']}.")
-else:
-    print(
-        "\nPUBLISH=False, nothing was written. In the dashboard this same proposal shows as a "
-        "diff the human reviews before publishing; set PUBLISH=True above to publish it "
-        "programmatically instead, or use client.evaluations.prompts.get() next run to pick up "
-        "whatever version is live once someone approves it via the dashboard."
-    )
+    # --- Step 5: ask the judge to propose a rewrite ----------------------------------------------------
+    proposal = client.evaluations.prompts.propose(prompt.id)
+    print(f"\nProposed rewrite (based on {proposal['sourceBreakdown']['evalRun']} eval-run + "
+          f"{proposal['sourceBreakdown']['onlineEvaluator']} online-evaluator example(s)):")
+    print(f"\n  {proposal['revisedText']}")
+    print(f"\nReasoning: {proposal['reasoning']}")
+
+
+    # --- Step 6: publish (or don't) -------------------------------------------------------------------
+    if PUBLISH:
+        published = client.evaluations.prompts.publish_version(
+            prompt.id,
+            text=proposal["revisedText"],
+            reasoning=proposal["reasoning"],
+            based_on_version=prompt.version,
+        )
+        print(f"\nPublished as v{published['currentVersion']}.")
+    else:
+        print(
+            "\nPUBLISH=False, nothing was written. In the dashboard this same proposal shows as a "
+            "diff the human reviews before publishing; set PUBLISH=True above to publish it "
+            "programmatically instead, or use client.evaluations.prompts.get() next run to pick up "
+            "whatever version is live once someone approves it via the dashboard."
+        )
+finally:
+    # Pause live scoring so re-runs don't leave a judge-spending scorer on this project
+    # (rubric intact), even if something above failed.
+    client.monitor.judge_scorers.update(evaluator.id, online={"enabled": False})

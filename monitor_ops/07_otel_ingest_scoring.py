@@ -19,10 +19,15 @@ import time
 
 from dotenv import load_dotenv
 from agentx import AgentX
-from opentelemetry import trace
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+
+try:
+    from opentelemetry import trace
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor
+    from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+except ImportError:
+    print("SKIPPED: pip install opentelemetry-sdk opentelemetry-exporter-otlp-proto-http")
+    sys.exit(0)
 
 load_dotenv()
 BASE_URL = os.getenv("AGENTX_SELFHOST_BASE_URL", "http://localhost:4700/api/v1").rstrip(
@@ -38,9 +43,10 @@ def check(name, ok, detail=""):
         failures.append(name)
 
 
-api_key = os.environ.get("AGENTX_API_KEY", "")
 # --- 1. a fully-sampled online judge (setup via SDK) -----------------------
-bootstrap = AgentX(api_key=api_key, base_url=BASE_URL)
+bootstrap = AgentX(api_key=os.environ.get("AGENTX_API_KEY", ""), base_url=BASE_URL)
+project = bootstrap.projects.create(f"Monitor ops 07 {int(time.time())}")
+api_key = project["apiKey"]
 client = AgentX(api_key=api_key, base_url=BASE_URL)
 client.ping()
 

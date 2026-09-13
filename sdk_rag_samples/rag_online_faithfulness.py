@@ -130,34 +130,36 @@ client.monitor.judge_scorers.update(
 )
 print(f"Live scoring enabled on seeded judge scorer '{evaluator.name}' ({evaluator.id})")
 
-handler = AgentXCallbackHandler(tracer=client.tracer, name="rag-support-agent")
-for question in [
-    "What is your refund window and how long do refunds take?",
-    "Does the espresso machine come with a warranty?",  # not in the corpus
-]:
-    answer = chain.invoke(question, config={"callbacks": [handler]})
-    print(f"\nQ: {question}\nA: {answer[:160]}")
+try:
+    handler = AgentXCallbackHandler(tracer=client.tracer, name="rag-support-agent")
+    for question in [
+        "What is your refund window and how long do refunds take?",
+        "Does the espresso machine come with a warranty?",  # not in the corpus
+    ]:
+        answer = chain.invoke(question, config={"callbacks": [handler]})
+        print(f"\nQ: {question}\nA: {answer[:160]}")
 
-client.tracer.flush(timeout=10)
+    client.tracer.flush(timeout=10)
 
-# ---------------------------------------------------------------------------
-# Judging happens at ingest - poll the evaluator's events until both traces
-# are scored, then read the judge's justification. Expect ratings of 10 even
-# for the warranty question IF the model honestly said the context does not
-# cover warranty: faithfulness rewards refusing to hallucinate.
-# ---------------------------------------------------------------------------
+    # ---------------------------------------------------------------------------
+    # Judging happens at ingest - poll the evaluator's events until both traces
+    # are scored, then read the judge's justification. Expect ratings of 10 even
+    # for the warranty question IF the model honestly said the context does not
+    # cover warranty: faithfulness rewards refusing to hallucinate.
+    # ---------------------------------------------------------------------------
 
-events = []
-for _ in range(30):
-    events = client.monitor.judge_scorers.events(evaluator.id, window="24h")
-    if len(events) >= 2:
-        break
-    time.sleep(3)
+    events = []
+    for _ in range(30):
+        events = client.monitor.judge_scorers.events(evaluator.id, window="24h")
+        if len(events) >= 2:
+            break
+        time.sleep(3)
 
-for event in events:
-    print(f"\nrating {event.rating} | {(event.justification or '')[:220]}")
-
-# Pause the evaluator so this sample does not keep judging (and paying for)
-# unrelated live traffic. Delete it instead if you do not want to keep it.
-client.monitor.judge_scorers.update(evaluator.id, online={"enabled": False})
-print(f"\nPaused live scoring on {evaluator.id} - re-enable it on the Scorers page")
+    for event in events:
+        print(f"\nrating {event.rating} | {(event.justification or '')[:220]}")
+finally:
+    # Pause the evaluator even if something above failed - a leftover sampleRate-1.0
+    # online judge would keep judging (and paying for) every trace in this project.
+    # Delete it instead if you do not want to keep it.
+    client.monitor.judge_scorers.update(evaluator.id, online={"enabled": False})
+    print(f"\nPaused live scoring on {evaluator.id} - re-enable it on the Scorers page")

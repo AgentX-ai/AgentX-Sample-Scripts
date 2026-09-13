@@ -93,27 +93,32 @@ client.monitor.judge_scorers.update(
 )
 print(f"Live scoring enabled on seeded judge scorer '{evaluator.name}' ({evaluator.id})")
 
-handler = AgentXCallbackHandler(tracer=client.tracer, name="rag-support-agent")
-question = "Does the espresso machine come with a warranty?"
-answer = chain.invoke(question, config={"callbacks": [handler]})
-print(f"\nQ: {question}\nA: {answer[:160]}")
+try:
+    handler = AgentXCallbackHandler(tracer=client.tracer, name="rag-support-agent")
+    question = "Does the espresso machine come with a warranty?"
+    answer = chain.invoke(question, config={"callbacks": [handler]})
+    print(f"\nQ: {question}\nA: {answer[:160]}")
 
-client.tracer.flush(timeout=10)
+    client.tracer.flush(timeout=10)
 
-# Wait for the ingest-time judgment, then show the rating and the Signal it raised.
-events = []
-for _ in range(30):
-    events = client.monitor.judge_scorers.events(evaluator.id, window="24h")
-    if events:
-        break
-    time.sleep(3)
+    # Wait for the ingest-time judgment, then show the rating and the Signal it raised.
+    events = []
+    for _ in range(30):
+        events = client.monitor.judge_scorers.events(evaluator.id, window="24h")
+        if events:
+            break
+        time.sleep(3)
 
-for event in events:
-    print(f"\nrating {event.rating} | {(event.justification or '')[:220]}")
+    for event in events:
+        print(f"\nrating {event.rating} | {(event.justification or '')[:220]}")
 
-for signal in client.monitor.signals.list(severity="high", limit=10):
-    if evaluator.name in signal.summary:
-        print(f"\nSIGNAL: {signal.severity} | {signal.summary[:200]}")
+    for signal in client.monitor.signals.list(severity="high", limit=10):
+        if evaluator.name in signal.summary:
+            print(f"\nSIGNAL: {signal.severity} | {signal.summary[:200]}")
 
-client.monitor.judge_scorers.update(evaluator.id, online={"enabled": False})
-print(f"\nPaused live scoring on {evaluator.id} - re-enable it on the Scorers page")
+finally:
+    # Pause the evaluator even if something above failed - a leftover sampleRate-1.0
+    # online judge would keep judging (and paying for) every trace in this project.
+    # Delete it instead if you do not want to keep it.
+    client.monitor.judge_scorers.update(evaluator.id, online={"enabled": False})
+    print(f"\nPaused live scoring on {evaluator.id} - re-enable it on the Scorers page")

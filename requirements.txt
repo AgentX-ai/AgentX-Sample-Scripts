@@ -1,8 +1,19 @@
+# Core: every sample loads .env and talks to the engine through the SDK
 agentx-python
+python-dotenv
+requests
+numpy>=2,<3
+websockets>=14,<16
+# Framework samples (sdk_trace_samples / sdk_eval_samples / sdk_rag_samples)
 agentx-python[langchain]
 langchain==1.3.13
 langchain_openai==1.3.5
-numpy==2.5.1
-websockets>=14,<16
-openai-agents==0.18.3
 langchain-anthropic
+openai-agents==0.18.3
+openai
+anthropic
+crewai
+google-adk
+google-genai
+opentelemetry-sdk
+opentelemetry-exporter-otlp-proto-http

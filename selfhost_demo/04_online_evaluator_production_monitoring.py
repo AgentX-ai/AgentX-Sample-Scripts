@@ -55,112 +55,117 @@ evaluator = client.monitor.judge_scorers.builder(
 print(f"Created judge scorer with live scoring on: {evaluator.id} ({evaluator.name})")
 
 
-# --- Step 3: send some "live" traffic, a deliberate mix of good and bad answers ------------------
-# In practice this is just your agent's normal traced calls; nothing about tracer.trace() changes
-# for Online Evaluator scoring to pick them up. The two "good" turns run a real ReAct loop with a
-# policy_lookup tool (see 02_trace_your_agent.py for the same shape explained in depth), the two
-# "bad" ones stay canned: they represent a broken code path (a bug, a bad fallback handler), not
-# something a reasonably-prompted model would authentically produce on its own, so scripting them
-# is the only way to reliably demo the Online Evaluator catching a real regression.
-POLICY_DB = {
-    "return": "You have 30 days from delivery to return most items for a full refund.",
-    "ship": "Yes, we ship to over 40 countries. Shipping costs are calculated at checkout.",
-}
-
-
-def policy_lookup(topic: str) -> str:
-    for key, text in POLICY_DB.items():
-        if key in topic.lower():
-            return text
-    return "No policy found for that topic."
-
-
-POLICY_TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "policy_lookup",
-            "description": "Look up company policy text by topic, e.g. 'return', 'ship'.",
-            "parameters": {
-                "type": "object",
-                "properties": {"topic": {"type": "string"}},
-                "required": ["topic"],
-            },
-        },
+try:
+    # --- Step 3: send some "live" traffic, a deliberate mix of good and bad answers ------------------
+    # In practice this is just your agent's normal traced calls; nothing about tracer.trace() changes
+    # for Online Evaluator scoring to pick them up. The two "good" turns run a real ReAct loop with a
+    # policy_lookup tool (see 02_trace_your_agent.py for the same shape explained in depth), the two
+    # "bad" ones stay canned: they represent a broken code path (a bug, a bad fallback handler), not
+    # something a reasonably-prompted model would authentically produce on its own, so scripting them
+    # is the only way to reliably demo the Online Evaluator catching a real regression.
+    POLICY_DB = {
+        "return": "You have 30 days from delivery to return most items for a full refund.",
+        "ship": "Yes, we ship to over 40 countries. Shipping costs are calculated at checkout.",
     }
-]
 
 
-def run_agent_loop(query: str) -> str:
-    messages = [
-        {"role": "system", "content": "You are a helpful support agent. Use policy_lookup for policy questions."},
-        {"role": "user", "content": query},
+    def policy_lookup(topic: str) -> str:
+        for key, text in POLICY_DB.items():
+            if key in topic.lower():
+                return text
+        return "No policy found for that topic."
+
+
+    POLICY_TOOLS = [
+        {
+            "type": "function",
+            "function": {
+                "name": "policy_lookup",
+                "description": "Look up company policy text by topic, e.g. 'return', 'ship'.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"topic": {"type": "string"}},
+                    "required": ["topic"],
+                },
+            },
+        }
     ]
-    while True:
-        resp = oai.chat.completions.create(model="gpt-4o-mini", messages=messages, tools=POLICY_TOOLS)
-        message = resp.choices[0].message
-        if not message.tool_calls:
-            return message.content
-        messages.append(message.model_dump(exclude_none=True))
-        for tool_call in message.tool_calls:
-            args = json.loads(tool_call.function.arguments)
-            with client.tracer.trace_tool_call("policy_lookup", input=args) as t:
-                result = policy_lookup(**args)
-                t.output = result
-            messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": result})
 
 
-good_queries = ["What's your return window?", "Do you ship internationally?"]
-bad_turns = [
-    ("Can you help me with my order?", "I don't know, figure it out yourself."),
-    ("Is my data secure?", "We don't really think about that, just use the site normally."),
-]
+    def run_agent_loop(query: str) -> str:
+        messages = [
+            {"role": "system", "content": "You are a helpful support agent. Use policy_lookup for policy questions."},
+            {"role": "user", "content": query},
+        ]
+        while True:
+            resp = oai.chat.completions.create(model="gpt-4o-mini", messages=messages, tools=POLICY_TOOLS)
+            message = resp.choices[0].message
+            if not message.tool_calls:
+                return message.content
+            messages.append(message.model_dump(exclude_none=True))
+            for tool_call in message.tool_calls:
+                args = json.loads(tool_call.function.arguments)
+                with client.tracer.trace_tool_call("policy_lookup", input=args) as t:
+                    result = policy_lookup(**args)
+                    t.output = result
+                messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": result})
 
-print(f"\nSending {len(good_queries) + len(bad_turns)} traces...")
-for query in good_queries:
-    with client.tracer.trace("support-agent", input={"query": query}, framework="openai", model="gpt-4o-mini") as span:
-        span.output = run_agent_loop(query)
-    print(f"  sent: {query!r}")
 
-for query, canned_answer in bad_turns:
-    with client.tracer.trace("support-agent", input={"query": query}, framework="openai", model="gpt-4o-mini") as span:
-        span.output = canned_answer
-    print(f"  sent: {query!r}")
+    good_queries = ["What's your return window?", "Do you ship internationally?"]
+    bad_turns = [
+        ("Can you help me with my order?", "I don't know, figure it out yourself."),
+        ("Is my data secure?", "We don't really think about that, just use the site normally."),
+    ]
 
-client.tracer.flush(timeout=10)
+    print(f"\nSending {len(good_queries) + len(bad_turns)} traces...")
+    for query in good_queries:
+        with client.tracer.trace("support-agent", input={"query": query}, framework="openai", model="gpt-4o-mini") as span:
+            span.output = run_agent_loop(query)
+        print(f"  sent: {query!r}")
+
+    for query, canned_answer in bad_turns:
+        with client.tracer.trace("support-agent", input={"query": query}, framework="openai", model="gpt-4o-mini") as span:
+            span.output = canned_answer
+        print(f"  sent: {query!r}")
+
+    client.tracer.flush(timeout=10)
 
 
-# --- Step 4: poll for ratings -----------------------------------------------------------------
-# Scoring runs asynchronously right after ingest, same as Monitor's pattern detection: poll
-# instead of expecting results immediately.
-print("\nWaiting for the Online Evaluator to finish scoring...")
-# Wait until MOST of the demo traffic is scored (6 traces sent above), not just the first
-# verdict - stopping at one trace made the "bad answer raises a signal" half invisible.
-points = []
-for attempt in range(20):
-    time.sleep(3)
-    points = [p for p in client.monitor.judge_scorers.ratings(evaluator.id, window="24h") if p.count > 0]
-    if sum(p.count for p in points) >= 4:
-        break
-    print(f"  ...{sum(p.count for p in points)} scored (attempt {attempt + 1}/20)")
+    # --- Step 4: poll for ratings -----------------------------------------------------------------
+    # Scoring runs asynchronously right after ingest, same as Monitor's pattern detection: poll
+    # instead of expecting results immediately.
+    print("\nWaiting for the Online Evaluator to finish scoring...")
+    # Wait until MOST of the demo traffic is scored (6 traces sent above), not just the first
+    # verdict - stopping at one trace made the "bad answer raises a signal" half invisible.
+    points = []
+    for attempt in range(20):
+        time.sleep(3)
+        points = [p for p in client.monitor.judge_scorers.ratings(evaluator.id, window="24h") if p.count > 0]
+        if sum(p.count for p in points) >= 4:
+            break
+        print(f"  ...{sum(p.count for p in points)} scored (attempt {attempt + 1}/20)")
 
-if points:
-    total_count = sum(p.count for p in points)
-    weighted_avg = sum((p.average_rating or 0) * p.count for p in points) / total_count
-    print(f"\nScored {total_count} traces so far, average rating: {weighted_avg:.2f} / 10")
+    if points:
+        total_count = sum(p.count for p in points)
+        weighted_avg = sum((p.average_rating or 0) * p.count for p in points) / total_count
+        print(f"\nScored {total_count} traces so far, average rating: {weighted_avg:.2f} / 10")
 
-    events = client.monitor.judge_scorers.events(evaluator.id, window="24h")
-    print(f"\nWorst-rated traces ({len(events)}):")
-    for event in events[:3]:
-        print(f"  [{event.rating:.1f}/10] {event.input!r} -> {event.output!r}")
+        events = client.monitor.judge_scorers.events(evaluator.id, window="24h")
+        print(f"\nWorst-rated traces ({len(events)}):")
+        for event in events[:3]:
+            print(f"  [{event.rating:.1f}/10] {event.input!r} -> {event.output!r}")
 
-    print(
-        "\nCheck the Scorers page in the dashboard for the full breakdown, "
-        "the same events list above is exactly the evidence "
-        "05_prompt_registry_autotune_loop.py pulls into its rewrite proposal."
-    )
-else:
-    print(
-        "\nNo ratings showed up within the wait window. Check the dashboard directly, or increase "
-        "the wait loop above, detection can occasionally take longer under load."
-    )
+        print(
+            "\nCheck the Scorers page in the dashboard for the full breakdown, "
+            "the same events list above is exactly the evidence "
+            "05_prompt_registry_autotune_loop.py pulls into its rewrite proposal."
+        )
+    else:
+        print(
+            "\nNo ratings showed up within the wait window. Check the dashboard directly, or increase "
+            "the wait loop above, detection can occasionally take longer under load."
+        )
+finally:
+    # Pause live scoring so re-runs don't leave a judge-spending scorer on this project
+    # (rubric intact), even if something above failed.
+    client.monitor.judge_scorers.update(evaluator.id, online={"enabled": False})

@@ -19,6 +19,7 @@ AGENTX_SELFHOST_BASE_URL):
 
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Any, Dict
 
@@ -39,9 +40,7 @@ sys.path.insert(0, str(TRACE_SAMPLE_DIR))
 
 from langchain_billing_dispute_investigation import investigate
 
-# No workspace_id, the API key alone selects the project. BASE_URL defaults to the local engine;
-# the key itself is fetched from the unauthenticated bootstrap endpoint the same way the dashboard
-# does on load, so nothing needs to be hand-copied into .env for this to run.
+# No workspace_id, the API key alone selects the project. BASE_URL defaults to the local engine.
 BASE_URL = os.getenv("AGENTX_SELFHOST_BASE_URL", "http://localhost:4700/api/v1")
 
 
@@ -66,47 +65,50 @@ handler = AgentXCallbackHandler(
 # than referencing a fixed hosted-platform id - investigate()'s own mock backend (customer,
 # subscription, invoice, refund ledger) is fixed for every call regardless of the case, only the
 # wording of the customer's message varies per case, see billing_dispute_agent's own comment below.
-# dataset: Dataset = (
-#     client.evaluations.datasets.builder(
-#         name="Billing Dispute Investigation Eval",
-#         description="Cases for the LangChain billing-dispute investigation agent.",
-#         number_of_requests=1,
-#         acceptance_criteria=(
-#             "Warm, concise, and factual: explains what was found and what was done, references "
-#             "the relevant policy in plain language, and never exposes internal reasoning, "
-#             "confidence scores, or system details."
-#         ),
-#         rejection_criteria=(
-#             "No invented policy details, no promising an outcome that contradicts the "
-#             "investigation, no exposing internal risk/eligibility scoring."
-#         ),
-#     )
-#     .add_case(
-#         query=(
-#             "I was charged $499 for an annual plan renewal yesterday, I tried to cancel one day "
-#             "before the renewal, but the page wasn't working. Please refund and ensure I won't be "
-#             "billed again!"
-#         ),
-#         expected_results=(
-#             "Acknowledges the failed cancellation attempt, explains a refund was issued (or "
-#             "escalated for review), confirms the subscription is canceled, and confirms auto-renew "
-#             "is disabled."
-#         ),
-#     )
-#     .add_case(
-#         query="Why was I charged for a renewal when I'm sure I canceled in time?",
-#         expected_results=(
-#             "Investigates the cancellation timing against the renewal date before concluding, and "
-#             "explains the outcome without blaming the customer."
-#         ),
-#     )
-#     .publish()
-# )
-# dataset_id = dataset.id
-dataset_id = "oH6Q6PQjU2YK2qinPc3ol"
+# Timestamp suffix so re-runs create distinguishable datasets/scorers instead of colliding.
+stamp = int(time.time())
+
+dataset: Dataset = (
+    client.evaluations.datasets.builder(
+        name=f"Billing Dispute Investigation Eval {stamp}",
+        description="Cases for the LangChain billing-dispute investigation agent.",
+        number_of_requests=1,
+        acceptance_criteria=(
+            "Warm, concise, and factual: explains what was found and what was done, references "
+            "the relevant policy in plain language, and never exposes internal reasoning, "
+            "confidence scores, or system details."
+        ),
+        rejection_criteria=(
+            "No invented policy details, no promising an outcome that contradicts the "
+            "investigation, no exposing internal risk/eligibility scoring."
+        ),
+    )
+    .add_case(
+        query=(
+            "I was charged $499 for an annual plan renewal yesterday, I tried to cancel one day "
+            "before the renewal, but the page wasn't working. Please refund and ensure I won't be "
+            "billed again!"
+        ),
+        expected_results=(
+            "Acknowledges the failed cancellation attempt, explains a refund was issued (or "
+            "escalated for review), confirms the subscription is canceled, and confirms auto-renew "
+            "is disabled."
+        ),
+    )
+    .add_case(
+        query="Why was I charged for a renewal when I'm sure I canceled in time?",
+        expected_results=(
+            "Investigates the cancellation timing against the renewal date before concluding, and "
+            "explains the outcome without blaming the customer."
+        ),
+    )
+    .publish()
+)
+dataset_id = dataset.id
+
 
 eval_scorer = client.monitor.judge_scorers.builder(
-    "Billing Dispute Investigation Eval Config",
+    f"Billing Dispute Investigation Eval Config {stamp}",
     number_of_requests=1,
     acceptance_criteria=(
         "Warm, concise, and factual: explains what was found and what was done, references the "
@@ -121,56 +123,62 @@ eval_scorer = client.monitor.judge_scorers.builder(
 eval_scorer_id = eval_scorer.id
 
 
-def billing_dispute_agent(case: EvaluationCase) -> Dict[str, Any]:
-    # sync=True blocks until AgentX has ingested the orchestrator trace, so investigate() gets
-    # trace_id back before returning. Passing trace_id through in the result dict below is what
-    # links this eval result to the trace, so its dashboard row gets a "View trace" action opening
-    # the full Execution Timeline instead of just the score.
-    # The mock backend inside investigate() (customer, subscription, invoice, refund ledger) is
-    # fixed for every call; only the wording of the customer's message varies per case.
-    output, trace_id = investigate(
-        user_message=case.query, client=client, handler=handler, sync=True
+try:
+    def billing_dispute_agent(case: EvaluationCase) -> Dict[str, Any]:
+        # sync=True blocks until AgentX has ingested the orchestrator trace, so investigate() gets
+        # trace_id back before returning. Passing trace_id through in the result dict below is what
+        # links this eval result to the trace, so its dashboard row gets a "View trace" action opening
+        # the full Execution Timeline instead of just the score.
+        # The mock backend inside investigate() (customer, subscription, invoice, refund ledger) is
+        # fixed for every call; only the wording of the customer's message varies per case.
+        output, trace_id = investigate(
+            user_message=case.query, client=client, handler=handler, sync=True
+        )
+        return {
+            "output": output,
+            "metadata": {"framework": "langchain"},
+            "trace_id": trace_id,
+        }
+
+
+    run_context: EvaluationRunContext = (
+        client.evaluations.run(
+            dataset_id=dataset_id,
+            subject={
+                "kind": "custom_agent",
+                "displayName": "Billing Dispute Investigation Agent",
+                "framework": "langchain",
+                "runtime": "local",
+            },
+            scorer_id=eval_scorer_id,
+        )
+        .execute(billing_dispute_agent)
+        .finalize()
     )
-    return {
-        "output": output,
-        "metadata": {"framework": "langchain"},
-        "trace_id": trace_id,
-    }
 
+    # run_context.average_rating reads a `liveStatistics` field the hosted SaaS API returns but
+    # self-host's engine doesn't populate yet, so it comes back None here even though every result was
+    # genuinely scored (self-host's holistic .analyze() report endpoint isn't implemented either, same
+    # gap). Pull the per-question ratings directly from the run instead and average them here - same
+    # workaround as selfhost_demo/03_evaluate_with_a_dataset.py.
+    # run_context._run.run_id: no public accessor for the run id exists on EvaluationRunContext yet.
+    run_detail = requests.get(
+        f"{BASE_URL}/evaluate/{run_context._run.run_id}",
+        headers={"x-api-key": client.api_key},
+        timeout=10,
+    ).json()
+    ratings = [r["rating"] for r in run_detail["results"] if r.get("rating") is not None]
+    if ratings:
+        print(f"Average rating: {sum(ratings) / len(ratings):.2f} ({len(ratings)} rated)")
+    else:
+        print("(No ratings yet.)")
+    print(f"Dashboard: {BASE_URL.removesuffix('/api/v1')}")
 
-run_context: EvaluationRunContext = (
-    client.evaluations.run(
-        dataset_id=dataset_id,
-        subject={
-            "kind": "custom_agent",
-            "displayName": "Billing Dispute Investigation Agent",
-            "framework": "langchain",
-            "runtime": "local",
-        },
-        scorer_id=eval_scorer_id,
-    )
-    .execute(billing_dispute_agent)
-    .finalize()
-)
-
-# run_context.average_rating reads a `liveStatistics` field the hosted SaaS API returns but
-# self-host's engine doesn't populate yet, so it comes back None here even though every result was
-# genuinely scored (self-host's holistic .analyze() report endpoint isn't implemented either, same
-# gap). Pull the per-question ratings directly from the run instead and average them here - same
-# workaround as selfhost_demo/03_evaluate_with_a_dataset.py.
-# run_context._run.run_id: no public accessor for the run id exists on EvaluationRunContext yet.
-run_detail = requests.get(
-    f"{BASE_URL}/evaluate/{run_context._run.run_id}",
-    headers={"x-api-key": client.api_key},
-    timeout=10,
-).json()
-ratings = [r["rating"] for r in run_detail["results"] if r.get("rating") is not None]
-if ratings:
-    print(f"Average rating: {sum(ratings) / len(ratings):.2f} ({len(ratings)} rated)")
-else:
-    print("(No ratings yet.)")
-print(f"Dashboard: {BASE_URL.removesuffix('/api/v1')}")
-
-# Every investigate() call above already used sync=True, so nothing is queued at this point;
-# this is just a defensive no-op safety net in case anything else on this client ever sends async.
-client.tracer.flush(timeout=15)
+    # Every investigate() call above already used sync=True, so nothing is queued at this point;
+    # this is just a defensive no-op safety net in case anything else on this client ever sends async.
+    client.tracer.flush(timeout=15)
+finally:
+    # Delete the run's timestamped judge scorer and dataset - without this, every run
+    # permanently adds one of each to the caller's project.
+    client.monitor.judge_scorers.delete(eval_scorer_id)
+    client.evaluations.datasets.delete(dataset_id)

@@ -8,8 +8,6 @@ from agentx.evaluations.models import Dataset
 load_dotenv()
 
 # Self-host: no workspace_id, the API key alone selects the project. BASE_URL defaults to the
-# local engine; the key itself is fetched from the unauthenticated bootstrap endpoint the same way
-# the dashboard does on load, so nothing needs to be hand-copied into .env for this to run.
 BASE_URL = os.getenv("AGENTX_SELFHOST_BASE_URL", "http://localhost:4700/api/v1")
 
 

@@ -29,4 +29,7 @@ export AGENTX_SELFHOST_BASE_URL=http://localhost:4700/api/v1
 session judge call. 06 needs an engine started with
 `AGENTX_QUOTA_ONLINE_JUDGE_CALLS_PER_DAY=<n>` plus `AGENTX_EXPECT_ONLINE_JUDGE_CAP=<n>` in this
 shell, and skips cleanly otherwise. The engine host needs `python3` on PATH for 02's code
-scorer.
+scorer. 02 and 03 require the engine to share the host loopback (a containerised engine cannot
+reach the local HTTP server these scripts start). 07 needs
+`pip install opentelemetry-sdk opentelemetry-exporter-otlp-proto-http` and skips cleanly when
+they are missing.

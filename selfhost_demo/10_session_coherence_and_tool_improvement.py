@@ -98,7 +98,7 @@ print(f"Tool schema ready: {TOOL_NAME} v{tool_schema['currentVersion']}")
 scorers = client.monitor.judge_scorers.list()
 existing = next((s for s in scorers if s.name == "Session Demo Quality Bar"), None)
 if existing is None:
-    client.monitor.judge_scorers.builder(
+    existing = client.monitor.judge_scorers.builder(
         "Session Demo Quality Bar",
         acceptance_criteria="Consistent with earlier turns, grounded in the stated policy, moves the customer forward.",
         rejection_criteria="Contradicts an earlier turn, asks for information already provided, or drifts off-topic.",
@@ -110,195 +110,202 @@ else:
     print("Using existing judge scorer: Session Demo Quality Bar")
 
 
-# --- Step 4: run the incoherent session for real -------------------------------------------------
-# Six turns sharing one session_id, each a real root span produced by tracer.trace() around a
-# real (patched, auto-traced) OpenAI completion - so every turn carries real tokens, a real "LLM
-# Call 1" child span, and the order-lookup turns a real tool-call child span via trace_tool_call
-# (turn 3's tool genuinely raises, exercising the SDK's success:false failure recording). The
-# CONTENT stays scripted: the model is instructed to deliver each turn's reply verbatim, since a
-# well-prompted model wouldn't reliably reproduce this failure mode on its own. Read the replies
-# in order and the problem is obvious to a human: turn 1 states a 30-day refund policy, turn 3's
-# order lookup fails, turn 4 drifts into an irrelevant question, turn 5 contradicts turn 1
-# outright, and turn 6 re-asks for the order number the customer gave in turn 2. Each reply IN
-# ISOLATION is polite and plausible, which is exactly why per-trace checks miss this failure.
-SESSION_ID = f"session-demo-{int(time.time())}"
-
-TURNS = [
-    {
-        "input": "Hi, what's your refund policy?",
-        "reply": "You can return any item within 30 days of purchase for a full refund, no questions asked.",
-    },
-    {
-        "input": "Great. Can you check on my order #88231? It hasn't arrived.",
-        "reply": "Let me look that up for you right away.",
-        "tool_query": "#88231",
-        "tool_fails": False,
-    },
-    {
-        "input": "Any update?",
-        "reply": "I'm having trouble accessing your order details right now. Give me one moment.",
-        "tool_query": "88231 status shipped?",
-        "tool_fails": True,
-    },
-    {
-        "input": "So where is my order?",
-        "reply": "Before I continue, could you tell me which platform or app you're using to contact us?",
-    },
-    {
-        "input": "What? I'm on your website. I just want my order or a refund.",
-        "reply": "Unfortunately our store policy is that all sales are final, so a refund isn't possible.",
-    },
-    {
-        "input": "You literally said 30 days, no questions asked!",
-        "reply": "I understand your frustration. To get started, could you share your order number with me?",
-    },
-]
-
-
-def search_orders(q: str, should_fail: bool) -> str:
-    # A validation-style rejection, not a transient timeout: the whole tool-improvement story is
-    # "the LLM formed the call wrong because the schema under-specifies it", and the error message
-    # is how a real tool teaches the judge what the parameter should have been. With this error
-    # (plus the malformed arguments) in the failure evidence, Suggest improvement has grounds to
-    # restructure the parameter itself (order_id, digits only), not just pad the description.
-    if should_fail:
-        raise ValueError(
-            f"invalid order query {q!r}: search_orders expects a numeric order id (digits only), e.g. '88231'"
-        )
-    return '{"order": "#88231", "status": "in transit", "eta": "2 days"}'
-
-
-trace_ids = []
-# Accumulated across turns and sent with every completion, the way a real multi-turn agent
-# carries context - so each turn's traced LLM call shows the genuine full conversation history
-# in its input (open turn 6's trace and the whole conversation is right there in the LLM span).
-conversation: list = []
-for i, turn in enumerate(TURNS):
-    # sync=True so span.trace_id is populated immediately (needed to map the coherence check's
-    # driftSpanId back to a turn number below).
-    with client.tracer.trace(
-        AGENT_NAME,
-        input={"query": turn["input"]},
-        framework="openai",
-        session_id=SESSION_ID,
-        metadata={"promptName": PROMPT_NAME},
-        agent_id=agent["_id"],
-        sync=True,
-    ) as span:
-        if "tool_query" in turn:
-            try:
-                with client.tracer.trace_tool_call(TOOL_NAME, input={"q": turn["tool_query"]}) as t:
-                    t.output = search_orders(turn["tool_query"], turn["tool_fails"])
-            except ValueError:
-                pass  # the failure is the point - recorded as success:false, conversation goes on
-        # The real LLM call (auto-traced as a child span by patch_openai_client, real tokens and
-        # latency), forced to the scripted reply so the session's incoherence is reproducible.
-        # gpt-4o-mini occasionally ignores "verbatim, nothing else" and appends stock boilerplate
-        # ("You are trained on data up to ...") despite the instruction - recording the known
-        # scripted reply instead of the model's raw text keeps every turn clean regardless, while
-        # the child span (see patch_openai_client) still captures the model's actual raw
-        # completion, so nothing about what really happened is hidden, just not what's shown as
-        # this turn's answer.
-        resp = oai.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a support agent in a scripted QA simulation. "
-                    "Reply with EXACTLY the following text, verbatim, nothing else:\n" + turn["reply"],
-                },
-                *conversation,
-                {"role": "user", "content": turn["input"]},
-            ],
-        )
-        span.output = turn["reply"]
-        conversation.append({"role": "user", "content": turn["input"]})
-        conversation.append({"role": "assistant", "content": turn["reply"]})
-    trace_ids.append(span.trace_id)
-print(f"Ran {len(TURNS)}-turn session with real traced LLM calls: {SESSION_ID}")
-
-client.tracer.flush(timeout=10)
-print("Waiting for async per-turn scoring (online evaluator + built-in patterns)...")
-time.sleep(10)
-
-
-# --- Step 5: session-level coherence check -------------------------------------------------------
-# One judge call over the assembled session. Same thing the dashboard's "Check coherence" button
-# does on the trace detail's span-tree panel.
 try:
-    score = client.monitor.sessions.coherence_check(SESSION_ID)
-except Exception as exc:
-    raise SystemExit(
-        f"Coherence check failed: {exc}\n"
-        "The engine needs a judge key (OPENAI_API_KEY env var, or Platform Settings > LLM Providers)."
-    )
-print(f"\nSession coherence: {score['rating']}/10 across {score['spanCount']} spans")
-print(f"  {score['justification']}")
-if score["driftSpanId"]:
-    # driftSpanId can be any span in the session (a turn's LLM/tool child, not just the turn root
-    # itself) - walk it up to its root to name the turn it belongs to.
-    spans = client.monitor.sessions.spans(SESSION_ID)
-    by_span_id = {s.get("spanId"): s for s in spans if s.get("spanId")}
-    drift = next((s for s in spans if s["_id"] == score["driftSpanId"]), None)
-    while drift and drift.get("parentSpanId"):
-        drift = by_span_id.get(drift["parentSpanId"])
-    if drift and drift["_id"] in trace_ids:
-        drift_turn = trace_ids.index(drift["_id"]) + 1
-        print(f"  Coherence first broke at turn {drift_turn}: {TURNS[drift_turn - 1]['reply']!r}")
+    # --- Step 4: run the incoherent session for real -------------------------------------------------
+    # Six turns sharing one session_id, each a real root span produced by tracer.trace() around a
+    # real (patched, auto-traced) OpenAI completion - so every turn carries real tokens, a real "LLM
+    # Call 1" child span, and the order-lookup turns a real tool-call child span via trace_tool_call
+    # (turn 3's tool genuinely raises, exercising the SDK's success:false failure recording). The
+    # CONTENT stays scripted: the model is instructed to deliver each turn's reply verbatim, since a
+    # well-prompted model wouldn't reliably reproduce this failure mode on its own. Read the replies
+    # in order and the problem is obvious to a human: turn 1 states a 30-day refund policy, turn 3's
+    # order lookup fails, turn 4 drifts into an irrelevant question, turn 5 contradicts turn 1
+    # outright, and turn 6 re-asks for the order number the customer gave in turn 2. Each reply IN
+    # ISOLATION is polite and plausible, which is exactly why per-trace checks miss this failure.
+    SESSION_ID = f"session-demo-{int(time.time())}"
+
+    TURNS = [
+        {
+            "input": "Hi, what's your refund policy?",
+            "reply": "You can return any item within 30 days of purchase for a full refund, no questions asked.",
+        },
+        {
+            "input": "Great. Can you check on my order #88231? It hasn't arrived.",
+            "reply": "Let me look that up for you right away.",
+            "tool_query": "#88231",
+            "tool_fails": False,
+        },
+        {
+            "input": "Any update?",
+            "reply": "I'm having trouble accessing your order details right now. Give me one moment.",
+            "tool_query": "88231 status shipped?",
+            "tool_fails": True,
+        },
+        {
+            "input": "So where is my order?",
+            "reply": "Before I continue, could you tell me which platform or app you're using to contact us?",
+        },
+        {
+            "input": "What? I'm on your website. I just want my order or a refund.",
+            "reply": "Unfortunately our store policy is that all sales are final, so a refund isn't possible.",
+        },
+        {
+            "input": "You literally said 30 days, no questions asked!",
+            "reply": "I understand your frustration. To get started, could you share your order number with me?",
+        },
+    ]
 
 
-# --- Step 6: tool improvement from the failed call -----------------------------------------------
-examples = client.evaluations.tool_schemas.examples(tool_schema["_id"], window="24h")
-print(f"\nTool evidence for {TOOL_NAME}: {len(examples['examples'])} example(s)")
-for ex in examples["examples"][:3]:
-    print(f"  [{ex['source']}] {ex['detail']}")
+    def search_orders(q: str, should_fail: bool) -> str:
+        # A validation-style rejection, not a transient timeout: the whole tool-improvement story is
+        # "the LLM formed the call wrong because the schema under-specifies it", and the error message
+        # is how a real tool teaches the judge what the parameter should have been. With this error
+        # (plus the malformed arguments) in the failure evidence, Suggest improvement has grounds to
+        # restructure the parameter itself (order_id, digits only), not just pad the description.
+        if should_fail:
+            raise ValueError(
+                f"invalid order query {q!r}: search_orders expects a numeric order id (digits only), e.g. '88231'"
+            )
+        return '{"order": "#88231", "status": "in transit", "eta": "2 days"}'
 
-tool_proposal = client.evaluations.tool_schemas.propose(tool_schema["_id"], window="24h")
-if tool_proposal.get("proposal"):
-    p = tool_proposal["proposal"]
-    print(f"Proposed tool definition rewrite (from {tool_proposal['exampleCount']} example(s)):")
-    for change in p["changes"]:
-        print(f"  [{change['tag']}] {change['text']}")
-    if PUBLISH:
-        published = client.evaluations.tool_schemas.publish_version(
-            tool_schema["_id"],
-            definition=p["definition"],
-            reasoning=p["reasoning"],
-            based_on_version=p["basedOnVersion"],
+
+    trace_ids = []
+    # Accumulated across turns and sent with every completion, the way a real multi-turn agent
+    # carries context - so each turn's traced LLM call shows the genuine full conversation history
+    # in its input (open turn 6's trace and the whole conversation is right there in the LLM span).
+    conversation: list = []
+    for i, turn in enumerate(TURNS):
+        # sync=True so span.trace_id is populated immediately (needed to map the coherence check's
+        # driftSpanId back to a turn number below).
+        with client.tracer.trace(
+            AGENT_NAME,
+            input={"query": turn["input"]},
+            framework="openai",
+            session_id=SESSION_ID,
+            metadata={"promptName": PROMPT_NAME},
+            agent_id=agent["_id"],
+            sync=True,
+        ) as span:
+            if "tool_query" in turn:
+                try:
+                    with client.tracer.trace_tool_call(TOOL_NAME, input={"q": turn["tool_query"]}) as t:
+                        t.output = search_orders(turn["tool_query"], turn["tool_fails"])
+                except ValueError:
+                    pass  # the failure is the point - recorded as success:false, conversation goes on
+            # The real LLM call (auto-traced as a child span by patch_openai_client, real tokens and
+            # latency), forced to the scripted reply so the session's incoherence is reproducible.
+            # gpt-4o-mini occasionally ignores "verbatim, nothing else" and appends stock boilerplate
+            # ("You are trained on data up to ...") despite the instruction - recording the known
+            # scripted reply instead of the model's raw text keeps every turn clean regardless, while
+            # the child span (see patch_openai_client) still captures the model's actual raw
+            # completion, so nothing about what really happened is hidden, just not what's shown as
+            # this turn's answer.
+            resp = oai.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a support agent in a scripted QA simulation. "
+                        "Reply with EXACTLY the following text, verbatim, nothing else:\n" + turn["reply"],
+                    },
+                    *conversation,
+                    {"role": "user", "content": turn["input"]},
+                ],
+            )
+            span.output = turn["reply"]
+            conversation.append({"role": "user", "content": turn["input"]})
+            conversation.append({"role": "assistant", "content": turn["reply"]})
+        trace_ids.append(span.trace_id)
+    print(f"Ran {len(TURNS)}-turn session with real traced LLM calls: {SESSION_ID}")
+
+    client.tracer.flush(timeout=10)
+    print("Waiting for async per-turn scoring (online evaluator + built-in patterns)...")
+    time.sleep(10)
+
+
+    # --- Step 5: session-level coherence check -------------------------------------------------------
+    # One judge call over the assembled session. Same thing the dashboard's "Check coherence" button
+    # does on the trace detail's span-tree panel.
+    try:
+        score = client.monitor.sessions.coherence_check(SESSION_ID)
+    except Exception as exc:
+        raise SystemExit(
+            f"Coherence check failed: {exc}\n"
+            "The engine needs a judge key (OPENAI_API_KEY env var, or Platform Settings > LLM Providers)."
         )
-        print(f"Published tool schema v{published['currentVersion']}.")
-else:
-    print(f"No tool proposal: {tool_proposal.get('message') or tool_proposal.get('error')}")
+    print(f"\nSession coherence: {score['rating']}/10 across {score['spanCount']} spans")
+    print(f"  {score['justification']}")
+    if score["driftSpanId"]:
+        # driftSpanId can be any span in the session (a turn's LLM/tool child, not just the turn root
+        # itself) - walk it up to its root to name the turn it belongs to.
+        spans = client.monitor.sessions.spans(SESSION_ID)
+        by_span_id = {s.get("spanId"): s for s in spans if s.get("spanId")}
+        drift = next((s for s in spans if s["_id"] == score["driftSpanId"]), None)
+        while drift and drift.get("parentSpanId"):
+            drift = by_span_id.get(drift["parentSpanId"])
+        if drift and drift["_id"] in trace_ids:
+            drift_turn = trace_ids.index(drift["_id"]) + 1
+            print(f"  Coherence first broke at turn {drift_turn}: {TURNS[drift_turn - 1]['reply']!r}")
 
 
-# --- Step 7: prompt improvement from the same session's scored traffic ---------------------------
-prompt_examples = client.evaluations.prompts.examples(prompt.id)
-online_count = sum(1 for ex in prompt_examples["examples"] if ex["source"] == "online_evaluator")
-print(f"\nPrompt evidence for {PROMPT_NAME}: {prompt_examples['exampleCount']} example(s) ({online_count} from this session's scored traffic)")
+    # --- Step 6: tool improvement from the failed call -----------------------------------------------
+    examples = client.evaluations.tool_schemas.examples(tool_schema["_id"], window="24h")
+    print(f"\nTool evidence for {TOOL_NAME}: {len(examples['examples'])} example(s)")
+    for ex in examples["examples"][:3]:
+        print(f"  [{ex['source']}] {ex['detail']}")
 
-if prompt_examples["exampleCount"] > 0:
-    prompt_proposal = client.evaluations.prompts.propose(prompt.id)
-    print("Proposed prompt rewrite:")
-    print(f"  {prompt_proposal['revisedText']}")
-    if PUBLISH:
-        published = client.evaluations.prompts.publish_version(
-            prompt.id,
-            text=prompt_proposal["revisedText"],
-            reasoning=prompt_proposal["reasoning"],
-            based_on_version=prompt.version,
+    tool_proposal = client.evaluations.tool_schemas.propose(tool_schema["_id"], window="24h")
+    if tool_proposal.get("proposal"):
+        p = tool_proposal["proposal"]
+        print(f"Proposed tool definition rewrite (from {tool_proposal['exampleCount']} example(s)):")
+        for change in p["changes"]:
+            print(f"  [{change['tag']}] {change['text']}")
+        if PUBLISH:
+            published = client.evaluations.tool_schemas.publish_version(
+                tool_schema["_id"],
+                definition=p["definition"],
+                reasoning=p["reasoning"],
+                based_on_version=p["basedOnVersion"],
+            )
+            print(f"Published tool schema v{published['currentVersion']}.")
+    else:
+        print(f"No tool proposal: {tool_proposal.get('message') or tool_proposal.get('error')}")
+
+
+    # --- Step 7: prompt improvement from the same session's scored traffic ---------------------------
+    prompt_examples = client.evaluations.prompts.examples(prompt.id)
+    online_count = sum(1 for ex in prompt_examples["examples"] if ex["source"] == "online_evaluator")
+    print(f"\nPrompt evidence for {PROMPT_NAME}: {prompt_examples['exampleCount']} example(s) ({online_count} from this session's scored traffic)")
+
+    if prompt_examples["exampleCount"] > 0:
+        prompt_proposal = client.evaluations.prompts.propose(prompt.id)
+        print("Proposed prompt rewrite:")
+        print(f"  {prompt_proposal['revisedText']}")
+        if PUBLISH:
+            published = client.evaluations.prompts.publish_version(
+                prompt.id,
+                text=prompt_proposal["revisedText"],
+                reasoning=prompt_proposal["reasoning"],
+                based_on_version=prompt.version,
+            )
+            print(f"Published prompt v{published['currentVersion']}.")
+    else:
+        print(
+            "No prompt evidence yet. The online evaluator scores asynchronously; wait a few seconds "
+            "and re-run, or check the Scorers page in the dashboard."
         )
-        print(f"Published prompt v{published['currentVersion']}.")
-else:
+
+
     print(
-        "No prompt evidence yet. The online evaluator scores asynchronously; wait a few seconds "
-        "and re-run, or check the Scorers page in the dashboard."
+        f"\nIn the dashboard: open the session's trace (Observe tab, session {SESSION_ID}) to see the "
+        "span tree with its Session Coherence card, Manage > Tools & MCPs for the tool proposal, and "
+        "Manage > Prompts for the prompt loop."
     )
-
-
-print(
-    f"\nIn the dashboard: open the session's trace (Observe tab, session {SESSION_ID}) to see the "
-    "span tree with its Session Coherence card, Manage > Tools & MCPs for the tool proposal, and "
-    "Manage > Prompts for the prompt loop."
-)
-if not PUBLISH:
-    print("PUBLISH=False, nothing was written. Set PUBLISH=True to publish both rewrites programmatically.")
+    if not PUBLISH:
+        print("PUBLISH=False, nothing was written. Set PUBLISH=True to publish both rewrites programmatically.")
+finally:
+    # Pause the live scorer and restore the demo project's monitoring to opt-in, even if
+    # something above failed - otherwise re-runs leave every future trace in this project
+    # being judged on your LLM key.
+    client.monitor.judge_scorers.update(existing.id, online={"enabled": False})
+    client.monitor.update_profile(agent["_id"], {"enabled": False, "coverageMode": "opt-in", "sampleRate": 0.1})

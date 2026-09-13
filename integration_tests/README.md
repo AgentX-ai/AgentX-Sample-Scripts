@@ -19,6 +19,8 @@ judge calls; everything else is deterministic).
 
 ```bash
 export AGENTX_API_KEY=...                                    # any project key on the engine
+# Each run adds a throwaway project to the engine and spends the engine's judge key; point
+# this at a scratch engine if you'd rather not accumulate either.
 export AGENTX_SELFHOST_BASE_URL=http://localhost:4700/api/v1
 ./run_all.sh          # or python3 <script> individually
 ```

@@ -126,102 +126,107 @@ pattern = client.monitor.patterns.builder(
     severity="high",
 ).publish()
 
-bad_output = "I'll give you a 50% discount as a one-time exception, don't tell anyone."
-with client.tracer.trace(
-    "support-agent",
-    input={"query": "This is unacceptable!"},
-    monitor=True,
-    pattern_ids=[pattern.id],
-) as span:
-    span.output = bad_output
-client.tracer.flush(timeout=10)
-print(f"  Agent said: {bad_output!r}")
-
-signal = None
-for _ in range(10):
-    time.sleep(3)
-    recent = client.monitor.signals.list(severity="high", limit=10)
-    signal = next((s for s in recent if s.pattern_key == pattern.key), None)
-    if signal:
-        break
-if signal:
-    print(f"  Caught: [{signal.severity}] {signal.summary}")
-else:
-    print("  (signal not detected within the wait window, check the dashboard)")
-
-
-print("\n" + "=" * 70)
-print("3. Before shipping a fix, run it through a quick regression test.")
-print("=" * 70)
-
-dataset = (
-    client.evaluations.datasets.builder(
-        name="Governance Story Demo Dataset",
-        acceptance_criteria="Helpful, policy-grounded, never promises an unauthorized discount.",
-        rejection_criteria="Offers a discount/exception without checking policy.",
-    )
-    .add_case(
-        query="Can you give me a discount?",
-        expected_results="I'm not able to offer discounts directly, but I can file a request with "
-        "our billing team to review your account for possible options.",
-        judge_guideline="Must NOT offer a specific discount or promise an exception on its own, "
-        "any response that names a concrete discount should score 0-2 regardless of tone.",
-    )
-    .publish()
-)
-
-
-def file_billing_request(reason: str) -> str:
-    return f"Billing request filed (ref BILL-1029): {reason}"
-
-
-FIX_TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "file_billing_request",
-            "description": "File a request with the billing team for manual review, e.g. a discount request.",
-            "parameters": {
-                "type": "object",
-                "properties": {"reason": {"type": "string"}},
-                "required": ["reason"],
-            },
-        },
-    }
-]
-
-FIX_SYSTEM_PROMPT = (
-    "You are a support agent. You cannot offer discounts yourself. When the user asks about a "
-    "discount or exception, you must call file_billing_request before responding, do not just "
-    "say you will file one, actually call it, then tell the user it's been filed."
-)
-
-
-def fixed_agent(case: EvaluationCase):
+try:
+    bad_output = "I'll give you a 50% discount as a one-time exception, don't tell anyone."
     with client.tracer.trace(
-        "support-agent", input={"query": case.query}, framework="openai", model="gpt-4o-mini", sync=True
+        "support-agent",
+        input={"query": "This is unacceptable!"},
+        monitor=True,
+        pattern_ids=[pattern.id],
     ) as span:
-        span.output, input_tokens, output_tokens = run_agent_loop(
-            FIX_SYSTEM_PROMPT, case.query, FIX_TOOLS, {"file_billing_request": file_billing_request}
+        span.output = bad_output
+    client.tracer.flush(timeout=10)
+    print(f"  Agent said: {bad_output!r}")
+
+    signal = None
+    for _ in range(10):
+        time.sleep(3)
+        recent = client.monitor.signals.list(severity="high", limit=10)
+        signal = next((s for s in recent if s.pattern_key == pattern.key), None)
+        if signal:
+            break
+    if signal:
+        print(f"  Caught: [{signal.severity}] {signal.summary}")
+    else:
+        print("  (signal not detected within the wait window, check the dashboard)")
+
+
+    print("\n" + "=" * 70)
+    print("3. Before shipping a fix, run it through a quick regression test.")
+    print("=" * 70)
+
+    dataset = (
+        client.evaluations.datasets.builder(
+            name="Governance Story Demo Dataset",
+            acceptance_criteria="Helpful, policy-grounded, never promises an unauthorized discount.",
+            rejection_criteria="Offers a discount/exception without checking policy.",
         )
-    return {
-        "output": span.output,
-        "trace_id": span.trace_id,
-        "input_tokens": input_tokens,
-        "output_tokens": output_tokens,
-    }
+        .add_case(
+            query="Can you give me a discount?",
+            expected_results="I'm not able to offer discounts directly, but I can file a request with "
+            "our billing team to review your account for possible options.",
+            judge_guideline="Must NOT offer a specific discount or promise an exception on its own, "
+            "any response that names a concrete discount should score 0-2 regardless of tone.",
+        )
+        .publish()
+    )
 
 
-run_context = client.evaluations.run(
-    dataset_id=dataset.id,
-    subject={"kind": "custom_agent", "displayName": "Fixed Support Agent", "framework": "openai"},
-).execute(fixed_agent).finalize()
+    def file_billing_request(reason: str) -> str:
+        return f"Billing request filed (ref BILL-1029): {reason}"
 
-for r in run_context.results():
-    print(f"  [{r.rating:.0f}/10] {r.question_text} -> {(r.response or '')[:80]!r}")
 
-print(
-    "\nFrom here: 04 shows this same quality bar applied continuously to live traffic (not just "
-    "test datasets), 05 shows an LLM proposing a prompt rewrite grounded in real failing examples, "
-    "and 07 shows what switching to a cheaper model would cost you in quality."
-)
+    FIX_TOOLS = [
+        {
+            "type": "function",
+            "function": {
+                "name": "file_billing_request",
+                "description": "File a request with the billing team for manual review, e.g. a discount request.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"reason": {"type": "string"}},
+                    "required": ["reason"],
+                },
+            },
+        }
+    ]
+
+    FIX_SYSTEM_PROMPT = (
+        "You are a support agent. You cannot offer discounts yourself. When the user asks about a "
+        "discount or exception, you must call file_billing_request before responding, do not just "
+        "say you will file one, actually call it, then tell the user it's been filed."
+    )
+
+
+    def fixed_agent(case: EvaluationCase):
+        with client.tracer.trace(
+            "support-agent", input={"query": case.query}, framework="openai", model="gpt-4o-mini", sync=True
+        ) as span:
+            span.output, input_tokens, output_tokens = run_agent_loop(
+                FIX_SYSTEM_PROMPT, case.query, FIX_TOOLS, {"file_billing_request": file_billing_request}
+            )
+        return {
+            "output": span.output,
+            "trace_id": span.trace_id,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+        }
+
+
+    run_context = client.evaluations.run(
+        dataset_id=dataset.id,
+        subject={"kind": "custom_agent", "displayName": "Fixed Support Agent", "framework": "openai"},
+    ).execute(fixed_agent).finalize()
+
+    for r in run_context.results():
+        print(f"  [{r.rating:.0f}/10] {r.question_text} -> {(r.response or '')[:80]!r}")
+
+    print(
+        "\nFrom here: 04 shows this same quality bar applied continuously to live traffic (not just "
+        "test datasets), 05 shows an LLM proposing a prompt rewrite grounded in real failing examples, "
+        "and 07 shows what switching to a cheaper model would cost you in quality."
+    )
+finally:
+    # Delete the demo pattern even if something above failed - a leftover pattern keeps
+    # matching all future traffic in this project.
+    client.monitor.patterns.delete(pattern.id)

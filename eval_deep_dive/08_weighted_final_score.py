@@ -96,72 +96,79 @@ wordiness = client.monitor.judge_scorers.builder(
     rejection_criteria="Score 0-2 if the answer is short and direct.",
 ).publish()
 
-dataset = (
-    client.evaluations.datasets.builder(name=f"Weighted blend demo {stamp}")
-    .add_case(query="How long is the return window?",
-              expected_results="30 days from delivery.")
-    .add_case(query="Do you ship internationally?",
-              expected_results="Yes, to most countries, in 7-14 business days.")
-    .publish()
-)
-
-ANSWERS = {
-    "How long is the return window?": "30 days from delivery.",
-    "Do you ship internationally?": "Yes, to most countries, in 7-14 business days.",
-}
-
-run = (
-    client.evaluations.run(
-        dataset_id=dataset.id,
-        subject={"kind": "custom_agent", "displayName": "weighted-blend-demo"},
-        scorer_id=quality.id,
-        additional_scorer_ids=[wordiness.id],
+try:
+    dataset = (
+        client.evaluations.datasets.builder(name=f"Weighted blend demo {stamp}")
+        .add_case(query="How long is the return window?",
+                  expected_results="30 days from delivery.")
+        .add_case(query="Do you ship internationally?",
+                  expected_results="Yes, to most countries, in 7-14 business days.")
+        .publish()
     )
-    .execute(lambda case: ANSWERS[case.query])
-    .finalize()
-)
 
-# --- 2. The blend matches a recomputation from the row's own reported numbers -----------------
-# Judge ratings vary run to run; the CONTRACT is that the code scorer saw exactly the values the
-# row reports. Recomputing the same formula from the row and comparing pins that, noise and all.
-def expected_blend(row):
-    wordiness_rating = next(
-        (v["rating"] for v in (row.judge_scorer_results or []) if v["name"] == f"Wordiness {stamp}"), None
+    ANSWERS = {
+        "How long is the return window?": "30 days from delivery.",
+        "Do you ship internationally?": "Yes, to most countries, in 7-14 business days.",
+    }
+
+    run = (
+        client.evaluations.run(
+            dataset_id=dataset.id,
+            subject={"kind": "custom_agent", "displayName": "weighted-blend-demo"},
+            scorer_id=quality.id,
+            additional_scorer_ids=[wordiness.id],
+        )
+        .execute(lambda case: ANSWERS[case.query])
+        .finalize()
     )
-    parts = [
-        (row.rating, 0.4, True, 10),
-        (row.jaccard_similarity, 0.2, True, 1),
-        (row.rouge_score, 0.2, True, 1),
-        (wordiness_rating, 0.2, False, 10),
-    ]
-    total = weight_used = 0.0
-    for value, weight, higher_is_better, scale in parts:
-        if value is None:
-            continue
-        normalized = value / scale
-        total += (normalized if higher_is_better else 1 - normalized) * weight
-        weight_used += weight
-    return total / weight_used if weight_used else None
 
-rows = run.results()
-check("every row carries the Final score and Worst judge rows",
-      all({"Final score", "Worst judge"} <= {cs["name"] for cs in (r.code_scorer_results or [])} for r in rows))
+    # --- 2. The blend matches a recomputation from the row's own reported numbers -----------------
+    # Judge ratings vary run to run; the CONTRACT is that the code scorer saw exactly the values the
+    # row reports. Recomputing the same formula from the row and comparing pins that, noise and all.
+    def expected_blend(row):
+        wordiness_rating = next(
+            (v["rating"] for v in (row.judge_scorer_results or []) if v["name"] == f"Wordiness {stamp}"), None
+        )
+        parts = [
+            (row.rating, 0.4, True, 10),
+            (row.jaccard_similarity, 0.2, True, 1),
+            (row.rouge_score, 0.2, True, 1),
+            (wordiness_rating, 0.2, False, 10),
+        ]
+        total = weight_used = 0.0
+        for value, weight, higher_is_better, scale in parts:
+            if value is None:
+                continue
+            normalized = value / scale
+            total += (normalized if higher_is_better else 1 - normalized) * weight
+            weight_used += weight
+        return total / weight_used if weight_used else None
 
-for i, row in enumerate(rows):
-    final = next(cs for cs in row.code_scorer_results if cs["name"] == "Final score")
-    expected = expected_blend(row)
-    ok = final["score"] is not None and expected is not None and abs(final["score"] - expected) < 1e-9
-    check(f"row {i}: blend == recomputation from the row's own scores", ok,
-          f"scorer={final['score']} recomputed={expected}")
-    check(f"row {i}: the inverted Wordiness judge is in the reasoning",
-          "(inverted)" in (final.get("reasoning") or ""), final.get("reasoning", "")[:90])
+    rows = run.results()
+    check("every row carries the Final score and Worst judge rows",
+          all({"Final score", "Worst judge"} <= {cs["name"] for cs in (r.code_scorer_results or [])} for r in rows))
 
-    worst = next(cs for cs in row.code_scorer_results if cs["name"] == "Worst judge")
-    verdicts = [row.rating] + [v["rating"] for v in (row.judge_scorer_results or [])]
-    lowest = min(v for v in verdicts if v is not None)
-    check(f"row {i}: worst-judge gate == lowest verdict / 10",
-          worst["score"] is not None and abs(worst["score"] - lowest / 10) < 1e-9,
-          f"gate={worst['score']} lowest={lowest}")
+    for i, row in enumerate(rows):
+        final = next(cs for cs in row.code_scorer_results if cs["name"] == "Final score")
+        expected = expected_blend(row)
+        ok = final["score"] is not None and expected is not None and abs(final["score"] - expected) < 1e-9
+        check(f"row {i}: blend == recomputation from the row's own scores", ok,
+              f"scorer={final['score']} recomputed={expected}")
+        check(f"row {i}: the inverted Wordiness judge is in the reasoning",
+              "(inverted)" in (final.get("reasoning") or ""), final.get("reasoning", "")[:90])
+
+        worst = next(cs for cs in row.code_scorer_results if cs["name"] == "Worst judge")
+        verdicts = [row.rating] + [v["rating"] for v in (row.judge_scorer_results or [])]
+        lowest = min(v for v in verdicts if v is not None)
+        check(f"row {i}: worst-judge gate == lowest verdict / 10",
+              worst["score"] is not None and abs(worst["score"] - lowest / 10) < 1e-9,
+              f"gate={worst['score']} lowest={lowest}")
+
+finally:
+    # Delete the demo's two judge scorers - this runs in YOUR default project, so re-runs
+    # would otherwise pile up stamped Blend/Wordiness scorers on the Scorers page.
+    client.monitor.judge_scorers.delete(quality.id)
+    client.monitor.judge_scorers.delete(wordiness.id)
 
 print()
 if failures:

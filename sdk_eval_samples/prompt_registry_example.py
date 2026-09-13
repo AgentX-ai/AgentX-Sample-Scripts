@@ -16,7 +16,6 @@ AGENTX_SELFHOST_BASE_URL if the engine is running elsewhere.
 import os
 from typing import Any, Dict
 
-import requests
 from dotenv import load_dotenv
 from openai import OpenAI
 from agentx import AgentX
@@ -26,9 +25,7 @@ from agentx.evaluations.runner import EvaluationRunContext
 
 load_dotenv()
 
-# No workspace_id, the API key alone selects the project. BASE_URL defaults to the local engine;
-# the key itself is fetched from the unauthenticated bootstrap endpoint the same way the dashboard
-# does on load, so nothing needs to be hand-copied into .env for this to run.
+# No workspace_id, the API key alone selects the project. BASE_URL defaults to the local engine.
 BASE_URL = os.getenv("AGENTX_SELFHOST_BASE_URL", "http://localhost:4700/api/v1")
 
 

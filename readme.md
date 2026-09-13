@@ -12,6 +12,9 @@ and feature-based suites that run against the self-host engine (`AgentX-trace-ev
 pip install -r requirements.txt
 ```
 
+> Framework samples (LangChain, CrewAI, OpenAI Agents, Google ADK) need **Python 3.10+** -
+> `requirements.txt` pins langchain 1.x, which does not install on 3.9.
+
 Most scripts read a shared `.env` in this directory. The common variables:
 
 ```

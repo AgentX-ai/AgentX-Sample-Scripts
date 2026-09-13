@@ -72,155 +72,161 @@ gated = client.monitor.scorer_groups.create(
         {"kind": "pattern", "refId": pattern.id, "weight": 0, "gate": True},
     ],
 )
-check(
-    "groups are retrievable through the SDK",
-    {g.id for g in client.monitor.scorer_groups.list()} >= {group.id, gated.id},
-)
-
-dataset = (
-    client.evaluations.datasets.builder(name="Group demo")
-    .add_case(query="How long is the return window?", expected_results="30 days.")
-    .publish()
-)
-
-# --- 2. Blend run: rating == exact recomputation from the row's own member verdicts -----------
-run = (
-    client.evaluations.run(
-        dataset_id=dataset.id,
-        subject={"kind": "custom_agent", "displayName": "group-demo"},
-        scorer_group_id=group.id,
+try:
+    check(
+        "groups are retrievable through the SDK",
+        {g.id for g in client.monitor.scorer_groups.list()} >= {group.id, gated.id},
     )
-    .execute(
-        lambda case: "You have 30 days from delivery."
-    )  # no "sorry" -> pattern clean
-    .finalize()
-)
-row = run.results()[0]
-judges = {v["name"]: v["rating"] for v in (row.judge_scorer_results or [])}
-pattern_row = next(
-    cs for cs in (row.code_scorer_results or []) if cs["name"] == "Apologizes"
-)
-check(
-    "judge members report labeled verdicts",
-    set(judges) == {"Generous", "Harsh"},
-    str(judges),
-)
-check("the clean failure-pattern member scores 1", pattern_row["score"] == 1)
 
-expected = (
-    round(
-        (judges["Generous"] / 10 + judges["Harsh"] / 10 + pattern_row["score"])
-        / 3
-        * 100
+    dataset = (
+        client.evaluations.datasets.builder(name="Group demo")
+        .add_case(query="How long is the return window?", expected_results="30 days.")
+        .publish()
     )
-    / 10
-)
-check(
-    "run rating == the weighted blend of member scores, on 0-10",
-    row.rating is not None and abs(row.rating - expected) < 1e-9,
-    f"rating={row.rating} recomputed={expected}",
-)
-check("justification names the blend", "Weighted blend" in (row.justification or ""))
 
-detail = client.evaluations.get_run(run.run_id)
-check("run detail carries the group", detail.get("scorerGroupId") == group.id)
-check(
-    "breakdown leads with the group as primary",
-    detail["scorerBreakdown"][0]["name"] == "Blend bar (group)"
-    and detail["scorerBreakdown"][0]["primary"] is True,
-)
-
-# --- 3. Gate run: an apologizing answer trips the must-pass pattern -> score 0 ----------------
-gated_run = (
-    client.evaluations.run(
-        dataset_id=dataset.id,
-        subject={"kind": "custom_agent", "displayName": "group-demo"},
-        scorer_group_id=gated.id,
+    # --- 2. Blend run: rating == exact recomputation from the row's own member verdicts -----------
+    run = (
+        client.evaluations.run(
+            dataset_id=dataset.id,
+            subject={"kind": "custom_agent", "displayName": "group-demo"},
+            scorer_group_id=group.id,
+        )
+        .execute(
+            lambda case: "You have 30 days from delivery."
+        )  # no "sorry" -> pattern clean
+        .finalize()
     )
-    .execute(
-        lambda case: "Sorry, you have 30 days."
-    )  # matches the gated failure pattern
-    .finalize()
-)
-gated_row = gated_run.results()[0]
-check(
-    "must-pass gate zeroes the group score",
-    gated_row.rating == 0,
-    f"rating={gated_row.rating}",
-)
-check(
-    "justification names the gating member",
-    "Gated to 0" in (gated_row.justification or ""),
-)
-
-# --- 4. Live traffic: the group scores an ingested trace and signals below threshold ----------
-client.monitor.scorer_groups.update(
-    group.id,
-    online={"enabled": True, "sampleRate": 1, "alertThreshold": 5, "severity": "high"},
-)
-# No CERTIFIED token and it apologizes: Harsh ~2, pattern matched (0) -> group well below 5.
-with client.tracer.trace("group-live", input={"query": "help?"}, sync=True) as span:
-    span.output = "sorry, cannot help"
-client.tracer.flush(timeout=10)
-signal = None
-for _ in range(60):
-    recent = client.monitor.signals.list(limit=50)
-    signal = next(
-        (
-            s
-            for s in recent
-            if getattr(s, "pattern_key", None) == f"scorer-group:{group.id}"
-        ),
-        None,
+    row = run.results()[0]
+    judges = {v["name"]: v["rating"] for v in (row.judge_scorer_results or [])}
+    pattern_row = next(
+        cs for cs in (row.code_scorer_results or []) if cs["name"] == "Apologizes"
     )
-    if signal:
-        break
-    time.sleep(0.5)
-check(
-    "live traffic scored by the group raises a below-threshold Signal",
-    signal is not None,
-    getattr(signal, "summary", "")[:80] if signal else "",
-)
-
-ratings = client.monitor.scorer_groups.ratings(group.id, window="24h")
-check(
-    "the group has a ratings history (chart endpoint)",
-    any(p["count"] > 0 for p in ratings.get("points", [])),
-)
-
-# --- 5. Fail-closed: a GATED member that cannot score means NO score, not a blend -------------
-# Delete the pattern out from under the gated group, then re-grade. A deleted non-gating
-# member just renormalizes away; a deleted MUST-PASS member means the safety check never ran,
-# so the honest answer is no group score at all - never a blend that implies "passed".
-client.monitor.patterns.delete(pattern.id)
-failclosed_run = (
-    client.evaluations.run(
-        dataset_id=dataset.id,
-        subject={"kind": "custom_agent", "displayName": "group-demo"},
-        scorer_group_id=gated.id,
+    check(
+        "judge members report labeled verdicts",
+        set(judges) == {"Generous", "Harsh"},
+        str(judges),
     )
-    .execute(lambda case: "You have 30 days from delivery.")
-    .finalize()
-)
-fc_row = failclosed_run.results()[0]
-check(
-    "a gated member that cannot score produces NO group score",
-    fc_row.rating is None,
-    f"rating={fc_row.rating}",
-)
-check(
-    "justification names the unscoreable must-pass member",
-    "No score: must-pass member" in (fc_row.justification or ""),
-)
+    check("the clean failure-pattern member scores 1", pattern_row["score"] == 1)
 
-# --- 6. Clean up: a leftover sampleRate-1 online group would keep judging every ingested
-# trace in this project on your own LLM key, forever. (The pattern is already gone - the
-# fail-closed check above consumed its deletion.)
-client.monitor.scorer_groups.delete(group.id)
-client.monitor.scorer_groups.delete(gated.id)
-client.monitor.judge_scorers.delete(generous.id)
-client.monitor.judge_scorers.delete(harsh.id)
-check("demo scorers cleaned up", True)
+    expected = (
+        round(
+            (judges["Generous"] / 10 + judges["Harsh"] / 10 + pattern_row["score"])
+            / 3
+            * 100
+        )
+        / 10
+    )
+    check(
+        "run rating == the weighted blend of member scores, on 0-10",
+        row.rating is not None and abs(row.rating - expected) < 1e-9,
+        f"rating={row.rating} recomputed={expected}",
+    )
+    check("justification names the blend", "Weighted blend" in (row.justification or ""))
+
+    detail = client.evaluations.get_run(run.run_id)
+    check("run detail carries the group", detail.get("scorerGroupId") == group.id)
+    check(
+        "breakdown leads with the group as primary",
+        detail["scorerBreakdown"][0]["name"] == "Blend bar (group)"
+        and detail["scorerBreakdown"][0]["primary"] is True,
+    )
+
+    # --- 3. Gate run: an apologizing answer trips the must-pass pattern -> score 0 ----------------
+    gated_run = (
+        client.evaluations.run(
+            dataset_id=dataset.id,
+            subject={"kind": "custom_agent", "displayName": "group-demo"},
+            scorer_group_id=gated.id,
+        )
+        .execute(
+            lambda case: "Sorry, you have 30 days."
+        )  # matches the gated failure pattern
+        .finalize()
+    )
+    gated_row = gated_run.results()[0]
+    check(
+        "must-pass gate zeroes the group score",
+        gated_row.rating == 0,
+        f"rating={gated_row.rating}",
+    )
+    check(
+        "justification names the gating member",
+        "Gated to 0" in (gated_row.justification or ""),
+    )
+
+    # --- 4. Live traffic: the group scores an ingested trace and signals below threshold ----------
+    client.monitor.scorer_groups.update(
+        group.id,
+        online={"enabled": True, "sampleRate": 1, "alertThreshold": 5, "severity": "high"},
+    )
+    # No CERTIFIED token and it apologizes: Harsh ~2, pattern matched (0) -> group well below 5.
+    with client.tracer.trace("group-live", input={"query": "help?"}, sync=True) as span:
+        span.output = "sorry, cannot help"
+    client.tracer.flush(timeout=10)
+    signal = None
+    for _ in range(60):
+        recent = client.monitor.signals.list(limit=50)
+        signal = next(
+            (
+                s
+                for s in recent
+                if getattr(s, "pattern_key", None) == f"scorer-group:{group.id}"
+            ),
+            None,
+        )
+        if signal:
+            break
+        time.sleep(0.5)
+    check(
+        "live traffic scored by the group raises a below-threshold Signal",
+        signal is not None,
+        getattr(signal, "summary", "")[:80] if signal else "",
+    )
+
+    ratings = client.monitor.scorer_groups.ratings(group.id, window="24h")
+    check(
+        "the group has a ratings history (chart endpoint)",
+        any(p["count"] > 0 for p in ratings.get("points", [])),
+    )
+
+    # --- 5. Fail-closed: a GATED member that cannot score means NO score, not a blend -------------
+    # Delete the pattern out from under the gated group, then re-grade. A deleted non-gating
+    # member just renormalizes away; a deleted MUST-PASS member means the safety check never ran,
+    # so the honest answer is no group score at all - never a blend that implies "passed".
+    client.monitor.patterns.delete(pattern.id)
+    failclosed_run = (
+        client.evaluations.run(
+            dataset_id=dataset.id,
+            subject={"kind": "custom_agent", "displayName": "group-demo"},
+            scorer_group_id=gated.id,
+        )
+        .execute(lambda case: "You have 30 days from delivery.")
+        .finalize()
+    )
+    fc_row = failclosed_run.results()[0]
+    check(
+        "a gated member that cannot score produces NO group score",
+        fc_row.rating is None,
+        f"rating={fc_row.rating}",
+    )
+    check(
+        "justification names the unscoreable must-pass member",
+        "No score: must-pass member" in (fc_row.justification or ""),
+    )
+finally:
+    # --- 6. Clean up: a leftover sampleRate-1 online group would keep judging every ingested
+    # trace in this project on your own LLM key, forever.
+    client.monitor.scorer_groups.delete(group.id)
+    client.monitor.scorer_groups.delete(gated.id)
+    client.monitor.judge_scorers.delete(generous.id)
+    client.monitor.judge_scorers.delete(harsh.id)
+    try:
+        # Step 5 already consumed the pattern's deletion on the happy path; this only
+        # catches an earlier failure that would otherwise leak a live "Apologizes" pattern.
+        client.monitor.patterns.delete(pattern.id)
+    except Exception:
+        pass
+    check("demo scorers cleaned up", True)
 
 print()
 if failures:

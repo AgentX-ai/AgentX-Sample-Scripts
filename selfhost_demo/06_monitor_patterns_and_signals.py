@@ -49,64 +49,69 @@ pattern = client.monitor.patterns.builder(
 print(f"Published custom pattern: {pattern.id} ({pattern.name})")
 
 
-# --- Step 2: a trace that should trip it, checked immediately via monitor=True -------------------
-# pattern_ids=[pattern.id] checks only against this one pattern; omit it (as in Step 3 below) to
-# run the full default sweep instead.
-bad_response = (
-    "I understand your frustration. I'll give you a 50% discount as a one-time exception, "
-    "no need to check with anyone."
-)
-with client.tracer.trace(
-    "support-agent",
-    input={"query": "This is unacceptable, what are you going to do about it?"},
-    monitor=True,
-    pattern_ids=[pattern.id],
-) as span:
-    span.output = bad_response
+try:
+    # --- Step 2: a trace that should trip it, checked immediately via monitor=True -------------------
+    # pattern_ids=[pattern.id] checks only against this one pattern; omit it (as in Step 3 below) to
+    # run the full default sweep instead.
+    bad_response = (
+        "I understand your frustration. I'll give you a 50% discount as a one-time exception, "
+        "no need to check with anyone."
+    )
+    with client.tracer.trace(
+        "support-agent",
+        input={"query": "This is unacceptable, what are you going to do about it?"},
+        monitor=True,
+        pattern_ids=[pattern.id],
+    ) as span:
+        span.output = bad_response
 
-client.tracer.flush(timeout=10)
-print(f"\nSent a trace that should trip the pattern:\n  {bad_response!r}")
+    client.tracer.flush(timeout=10)
+    print(f"\nSent a trace that should trip the pattern:\n  {bad_response!r}")
 
 
-# --- Step 3: poll for the resulting signal --------------------------------------------------------
-# Detection runs asynchronously right after the trace lands, poll instead of expecting it
-# immediately.
-print("\nWaiting for Monitor to finish checking the trace...")
-signal = None
-for attempt in range(10):
-    time.sleep(3)
-    recent = client.monitor.signals.list(severity="high", limit=10)
-    signal = next((s for s in recent if s.pattern_key == pattern.key), None)
+    # --- Step 3: poll for the resulting signal --------------------------------------------------------
+    # Detection runs asynchronously right after the trace lands, poll instead of expecting it
+    # immediately.
+    print("\nWaiting for Monitor to finish checking the trace...")
+    signal = None
+    for attempt in range(10):
+        time.sleep(3)
+        recent = client.monitor.signals.list(severity="high", limit=10)
+        signal = next((s for s in recent if s.pattern_key == pattern.key), None)
+        if signal:
+            break
+        print(f"  ...not yet (attempt {attempt + 1}/10)")
+
     if signal:
-        break
-    print(f"  ...not yet (attempt {attempt + 1}/10)")
-
-if signal:
-    print("\nSignal detected:")
-    print(f"  id:          {signal.id}")
-    print(f"  severity:    {signal.severity}")
-    print(f"  pattern:     {signal.pattern_key}")
-    print(f"  summary:     {signal.summary}")
-    print(f"  occurrences: {signal.occurrence_count}")
-else:
-    print("\nNo signal showed up within the wait window. Check the dashboard (Governance > Monitor).")
+        print("\nSignal detected:")
+        print(f"  id:          {signal.id}")
+        print(f"  severity:    {signal.severity}")
+        print(f"  pattern:     {signal.pattern_key}")
+        print(f"  summary:     {signal.summary}")
+        print(f"  occurrences: {signal.occurrence_count}")
+    else:
+        print("\nNo signal showed up within the wait window. Check the dashboard (Governance > Monitor).")
 
 
-# --- Step 4: a clean trace, checked against the full built-in sweep -------------------------------
-# monitor=True with no pattern_ids runs every built-in check (tool failure, latency regression,
-# etc.) plus every enabled custom pattern for the workspace, nothing should fire here.
-with client.tracer.trace(
-    "support-agent",
-    input={"query": "What's your return window?"},
-    monitor=True,
-) as span:
-    span.output = "You have 30 days from delivery to return most items for a full refund."
+    # --- Step 4: a clean trace, checked against the full built-in sweep -------------------------------
+    # monitor=True with no pattern_ids runs every built-in check (tool failure, latency regression,
+    # etc.) plus every enabled custom pattern for the workspace, nothing should fire here.
+    with client.tracer.trace(
+        "support-agent",
+        input={"query": "What's your return window?"},
+        monitor=True,
+    ) as span:
+        span.output = "You have 30 days from delivery to return most items for a full refund."
 
-client.tracer.flush(timeout=10)
-print("\nSent a clean trace against the full default sweep, should produce no signal.")
+    client.tracer.flush(timeout=10)
+    print("\nSent a clean trace against the full default sweep, should produce no signal.")
 
-print(
-    "\nGovernance > Monitor in the dashboard shows every signal across every pattern, with "
-    "triage status (open/acknowledged/resolved) and feedback capture for correcting a false "
-    "positive/negative."
-)
+    print(
+        "\nGovernance > Monitor in the dashboard shows every signal across every pattern, with "
+        "triage status (open/acknowledged/resolved) and feedback capture for correcting a false "
+        "positive/negative."
+    )
+finally:
+    # Delete the demo pattern even if something above failed - a leftover pattern keeps
+    # matching all future traffic in this project.
+    client.monitor.patterns.delete(pattern.id)

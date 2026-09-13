@@ -77,120 +77,121 @@ group = client.monitor.scorer_groups.create(
         "idleSeconds": 0,    # demo: idle immediately; production uses e.g. 120
     },
 )
-check("group online profile is session-scoped", group.online and group.online.get("scope") == "session")
+try:
+    check("group online profile is session-scoped", group.online and group.online.get("scope") == "session")
 
-# --- 2. Two multi-turn conversations, one resolved and one not --------------------------------
-# Unique per run: the session-scoped group sweeps EVERY idle multi-turn session in the
-# project (leftovers from earlier runs included), and signals dedupe per (group, agent) with
-# a last-write-wins summary - a shared agent name would let an older session's verdict
-# overwrite this run's summary between our sweep and our assertion.
-AGENT_NAME = f"support-agent-{stamp}"
-
-
-def converse(session_id, turns):
-    for i, (q, a) in enumerate(turns):
-        with client.tracer.trace(
-            AGENT_NAME, input={"q": q}, session_id=session_id, sync=True
-        ) as span:
-            span.output = a
+    # --- 2. Two multi-turn conversations, one resolved and one not --------------------------------
+    # Unique per run: the session-scoped group sweeps EVERY idle multi-turn session in the
+    # project (leftovers from earlier runs included), and signals dedupe per (group, agent) with
+    # a last-write-wins summary - a shared agent name would let an older session's verdict
+    # overwrite this run's summary between our sweep and our assertion.
+    AGENT_NAME = f"support-agent-{stamp}"
 
 
-good_session = f"sess-good-{stamp}"
-converse(good_session, [
-    ("I was double-charged for order #4417.",
-     "I can see two charges for #4417 on the 3rd. The second one is an error on our side."),
-    ("Can you refund the duplicate?",
-     "Done - the duplicate charge is refunded. You'll see it on your statement in 3-5 business days."),
-])
+    def converse(session_id, turns):
+        for i, (q, a) in enumerate(turns):
+            with client.tracer.trace(
+                AGENT_NAME, input={"q": q}, session_id=session_id, sync=True
+            ) as span:
+                span.output = a
 
-bad_session = f"sess-bad-{stamp}"
-converse(bad_session, [
-    ("I was double-charged for order #4417.",
-     "Charges can take a while to settle; sometimes they resolve on their own."),
-    ("It's been two weeks. Can you refund the duplicate?",
-     "I apologize, but refunds are handled by a different team. Perhaps try the website?"),
-])
 
-def wait_for_spans(session_id, count, deadline_s=15):
-    """CH-telemetry engines ingest through a queue - wait until the turns are readable."""
-    deadline = time.time() + deadline_s
-    while time.time() < deadline:
-        if len([sp for sp in client.monitor.sessions.spans(session_id) if not sp.get("parentSpanId")]) >= count:
-            return True
-        time.sleep(0.5)
-    return False
+    good_session = f"sess-good-{stamp}"
+    converse(good_session, [
+        ("I was double-charged for order #4417.",
+         "I can see two charges for #4417 on the 3rd. The second one is an error on our side."),
+        ("Can you refund the duplicate?",
+         "Done - the duplicate charge is refunded. You'll see it on your statement in 3-5 business days."),
+    ])
 
-check("both conversations are readable", wait_for_spans(good_session, 2) and wait_for_spans(bad_session, 2))
+    bad_session = f"sess-bad-{stamp}"
+    converse(bad_session, [
+        ("I was double-charged for order #4417.",
+         "Charges can take a while to settle; sometimes they resolve on their own."),
+        ("It's been two weeks. Can you refund the duplicate?",
+         "I apologize, but refunds are handled by a different team. Perhaps try the website?"),
+    ])
 
-# --- 3. Session scope means NO per-trace verdicts at ingest -----------------------------------
-# The ratings history counts BOTH per-trace and per-session group verdicts, so all-zero buckets
-# here prove the ingest path really skipped this session-scoped group (a per-trace score would
-# land within a couple of seconds of the sync ingest above).
-time.sleep(2)
-pre = client.monitor.scorer_groups.ratings(group.id, window="24h")
-check("no verdict before the session sweep runs", all(p["count"] == 0 for p in pre["points"]))
+    def wait_for_spans(session_id, count, deadline_s=15):
+        """CH-telemetry engines ingest through a queue - wait until the turns are readable."""
+        deadline = time.time() + deadline_s
+        while time.time() < deadline:
+            if len([sp for sp in client.monitor.sessions.spans(session_id) if not sp.get("parentSpanId")]) >= count:
+                return True
+            time.sleep(0.5)
+        return False
 
-# --- 4. The idle sweep scores both conversations ----------------------------------------------
-# Production engines run this automatically every minute; the manual trigger keeps the demo
-# synchronous (it sweeps THIS project's idle sessions, at most 5 judgings per call - loop until
-# both conversations carry a verdict). idleSeconds=0 makes them immediately eligible.
-kind = f"scorer-group:{group.id}"
-def group_scores(session_id):
-    return [s for s in client.monitor.sessions.scores(session_id) if s["kind"] == kind]
+    check("both conversations are readable", wait_for_spans(good_session, 2) and wait_for_spans(bad_session, 2))
 
-def sweep_until(predicate, deadline_s=90):
-    deadline = time.time() + deadline_s
-    while time.time() < deadline:
-        client.monitor.sessions.run_sweep()
-        if predicate():
-            return True
-        time.sleep(1)
-    return False
+    # --- 3. Session scope means NO per-trace verdicts at ingest -----------------------------------
+    # The ratings history counts BOTH per-trace and per-session group verdicts, so all-zero buckets
+    # here prove the ingest path really skipped this session-scoped group (a per-trace score would
+    # land within a couple of seconds of the sync ingest above).
+    time.sleep(2)
+    pre = client.monitor.scorer_groups.ratings(group.id, window="24h")
+    check("no verdict before the session sweep runs", all(p["count"] == 0 for p in pre["points"]))
 
-check(
-    "the sweep scored both conversations",
-    sweep_until(lambda: len(group_scores(good_session)) >= 1 and len(group_scores(bad_session)) >= 1),
-)
+    # --- 4. The idle sweep scores both conversations ----------------------------------------------
+    # Production engines run this automatically every minute; the manual trigger keeps the demo
+    # synchronous (it sweeps THIS project's idle sessions, at most 5 judgings per call - loop until
+    # both conversations carry a verdict). idleSeconds=0 makes them immediately eligible.
+    kind = f"scorer-group:{group.id}"
+    def group_scores(session_id):
+        return [s for s in client.monitor.sessions.scores(session_id) if s["kind"] == kind]
 
-good = group_scores(good_session)
-bad = group_scores(bad_session)
-check("both sessions carry a group verdict", len(good) == 1 and len(bad) == 1)
-if good and bad:
+    def sweep_until(predicate, deadline_s=90):
+        deadline = time.time() + deadline_s
+        while time.time() < deadline:
+            client.monitor.sessions.run_sweep()
+            if predicate():
+                return True
+            time.sleep(1)
+        return False
+
     check(
-        "resolved conversation outscores the unresolved one",
-        (good[0]["rating"] or 0) > (bad[0]["rating"] or 0),
-        f"good={good[0]['rating']} bad={bad[0]['rating']}",
+        "the sweep scored both conversations",
+        sweep_until(lambda: len(group_scores(good_session)) >= 1 and len(group_scores(bad_session)) >= 1),
     )
-    # The bad session apologized - the must-pass gate zeroes the blend outright.
-    check("apology gate zeroed the bad session", bad[0]["rating"] == 0,
-          f"justification: {bad[0]['justification'][:90]}")
 
-# --- 5. The low session score is a Signal, keyed on the group ---------------------------------
-signals = [
-    s
-    for s in client.monitor.list_signals(polarity="all")
-    if s.pattern_key == kind and s.type == "scorer_group_low_session_score" and bad_session in (s.summary or "")
-]
-check("below-threshold session raised a group Signal", len(signals) >= 1)
+    good = group_scores(good_session)
+    bad = group_scores(bad_session)
+    check("both sessions carry a group verdict", len(good) == 1 and len(bad) == 1)
+    if good and bad:
+        check(
+            "resolved conversation outscores the unresolved one",
+            (good[0]["rating"] or 0) > (bad[0]["rating"] or 0),
+            f"good={good[0]['rating']} bad={bad[0]['rating']}",
+        )
+        # The bad session apologized - the must-pass gate zeroes the blend outright.
+        check("apology gate zeroed the bad session", bad[0]["rating"] == 0,
+              f"justification: {bad[0]['justification'][:90]}")
 
-# --- 6. A session that grows gets re-scored automatically -------------------------------------
-converse(bad_session, [
-    ("So that's it? No refund?",
-     "I apologize again - there is really nothing I can do from here."),
-])
-wait_for_spans(bad_session, 3)
-check("grown session was re-scored by the next sweep", sweep_until(lambda: len(group_scores(bad_session)) >= 2))
+    # --- 5. The low session score is a Signal, keyed on the group ---------------------------------
+    signals = [
+        s
+        for s in client.monitor.list_signals(polarity="all")
+        if s.pattern_key == kind and s.type == "scorer_group_low_session_score" and bad_session in (s.summary or "")
+    ]
+    check("below-threshold session raised a group Signal", len(signals) >= 1)
 
-# An unchanged session is NOT re-judged (freshness check = no repeat judge spend).
-client.monitor.sessions.run_sweep()
-check("unchanged session is not judged again", len(group_scores(bad_session)) == 2)
+    # --- 6. A session that grows gets re-scored automatically -------------------------------------
+    converse(bad_session, [
+        ("So that's it? No refund?",
+         "I apologize again - there is really nothing I can do from here."),
+    ])
+    wait_for_spans(bad_session, 3)
+    check("grown session was re-scored by the next sweep", sweep_until(lambda: len(group_scores(bad_session)) >= 2))
 
-# --- 7. Clean up: a leftover sampleRate-1 session group would keep judging every idle
-# conversation on the production sweep, on your own LLM key, forever.
-client.monitor.scorer_groups.delete(group.id)
-client.monitor.judge_scorers.delete(resolution.id)
-client.monitor.patterns.delete(apology.id)
-check("demo scorers cleaned up", True)
+    # An unchanged session is NOT re-judged (freshness check = no repeat judge spend).
+    client.monitor.sessions.run_sweep()
+    check("unchanged session is not judged again", len(group_scores(bad_session)) == 2)
+finally:
+    # --- 7. Clean up: a leftover sampleRate-1 session group would keep judging every idle
+    # conversation on the production sweep, on your own LLM key, forever.
+    client.monitor.scorer_groups.delete(group.id)
+    client.monitor.judge_scorers.delete(resolution.id)
+    client.monitor.patterns.delete(apology.id)
+    check("demo scorers cleaned up", True)
 
 print()
 if failures:

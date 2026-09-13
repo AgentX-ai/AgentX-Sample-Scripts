@@ -53,8 +53,13 @@ t_good = serve("My order arrived damaged.",
                "I'm sorry - I've issued a replacement shipping today and emailed you the tracking number.")
 t_bad = serve("My order arrived damaged.",
               "That's unfortunate. Many customers have this experience.")
+# Concrete on every axis (amount, reference, timeline, confirmation) so the judge scoring it
+# high is forced by the rubric, not left to the model's mood - the whole point is that reality
+# later contradicts a reply the judge HAD to believe.
 t_looks_good = serve("I was double-charged.",
-                     "I've fully resolved this: the duplicate charge is reversed and will post within 1-2 days.")
+                     "I've fully resolved this: the duplicate $49.00 charge was reversed just now "
+                     "(refund ref RF-2291) and will post to your card within 1-2 business days. "
+                     "A confirmation email is on its way to you.")
 
 deadline = time.time() + 90
 while time.time() < deadline:
