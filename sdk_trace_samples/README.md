@@ -23,3 +23,4 @@ Every script reads (via `.env` or the shell):
 - `deco_trace_test.py` - the `@client.tracer.trace(...)` decorator on a plain function; needs only `AGENTX_API_KEY` in `.env`
 - `otel_sample.py` - no AgentX SDK at all: exports a span over OTLP/HTTP straight to the engine's `/otel/v1/traces` endpoint
 - `memory_span_demo.py` - one trace mixing memory read/write spans with a knowledge retrieval, so the Execution Timeline's Memory lane has something to show
+- `nvidia_nim_demo.py` - `patch_nim_client` on an OpenAI-compatible NIM endpoint, stamping traces `framework: "nvidia-nim"`; uses `NIM_BASE_URL`/`NIM_API_KEY`, or falls back to `OPENAI_API_KEY` as a stand-in endpoint
