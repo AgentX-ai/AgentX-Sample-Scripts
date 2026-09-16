@@ -1,6 +1,6 @@
 """
 The full prompt registry autotune loop, end to end: register a prompt, generate real evidence
-that it's underperforming from *two* sources (a tagged eval run and Online Evaluator-scored
+that it's underperforming from *two* sources (a tagged eval run and judge-scorer-scored
 production traffic), ask an LLM judge to propose a rewrite grounded in that evidence, and publish
 it as a new version.
 
@@ -135,7 +135,7 @@ client.evaluations.run(
 print("Eval run tagged and scored.")
 
 
-# --- Step 3: Online Evaluator evidence (production traffic, not a curated dataset) ---------------
+# --- Step 3: Judge scorer evidence (production traffic, not a curated dataset) ---------------
 evaluator = client.monitor.judge_scorers.builder(
     "Prompt Autotune Demo Evaluator",
     acceptance_criteria="Empathetic, grounded in a real policy, offers a concrete next step.",
@@ -164,7 +164,7 @@ try:
         span.output = resp.choices[0].message.content
 
     client.tracer.flush(timeout=10)
-    print(f"Sent a live trace tagged for this prompt (Online Evaluator will score it): {span.output!r}")
+    print(f"Sent a live trace tagged for this prompt (the judge scorer will score it): {span.output!r}")
 
     time.sleep(6)  # scoring runs asynchronously right after ingest
 

@@ -1,6 +1,5 @@
 import os
 
-import requests
 from dotenv import load_dotenv
 from agentx import AgentX
 from agentx.integrations.crewai import AgentXCrewObserver

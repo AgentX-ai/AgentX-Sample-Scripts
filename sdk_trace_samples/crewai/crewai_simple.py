@@ -1,5 +1,4 @@
 import os
-import requests
 from dotenv import load_dotenv
 from crewai import Agent, Task, Crew
 from agentx import AgentX

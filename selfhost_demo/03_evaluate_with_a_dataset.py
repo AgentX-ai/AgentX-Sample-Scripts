@@ -6,15 +6,15 @@ problem around.
 
 `expected_results` and `judge_guideline` are two different things, easy to conflate:
 - `expected_results` is a concrete sample of what the agent should actually say: the judge
-  prompt treats it as ground truth and scores agreement with it (see judge-core's
-  DEFAULT_JUDGE_PROMPT: "Expected Results Are the Authoritative Ground Truth"). Write it as a
+  prompt treats it as ground truth and scores agreement with it (see DEFAULT_JUDGE_PROMPT in the
+  engine's core/evaluate/judge.ts: "Expected Results Are the Authoritative Ground Truth"). Write it as a
   real answer, not a description of one.
 - `judge_guideline` is per-case grading instructions, what to weigh, what to penalize, appended
   to the judge prompt as extra context, separate from the expected answer itself.
 
 Note: the grading config below turns on every similarity metric (vector/BLEU/ROUGE/Jaccard), all
 four are fully computed on self-host (ported from the hosted platform's own algorithms into the
-shared judge-core package), not stubs. It also attaches a code scorer, arbitrary JS run in-process
+engine's core/evaluate/judge.ts), not stubs. It also attaches a code scorer, arbitrary JS run in-process
 per result (core/evaluate/codeScorer.ts), for grading logic no similarity metric or LLM judge can
 express directly, a word-count conciseness check below, but any function of (input, output,
 expected) works. No dedicated SDK method exists for this yet (dashboard-managed today), so this

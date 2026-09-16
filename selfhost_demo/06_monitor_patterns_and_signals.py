@@ -15,7 +15,6 @@ real tool-calling and a LangChain callback handler, see
 import os
 import time
 
-import requests
 from dotenv import load_dotenv
 from agentx import AgentX
 

@@ -14,16 +14,12 @@ of sync since there's only ever one source of truth: the traces themselves. (Mon
 sample rate, retention, latency threshold -- is project-level now, set once for every agent via
 Platform Settings, not something this per-agent identity affects.)
 
-This script proves it by hitting GET /agent-monitoring/agents (the same endpoint Overview's agent
-table itself polls) before and after sending traces:
+This script proves it by listing the agent registry (client.monitor.agents.list(), the same data
+Overview's agent table polls) before and after sending traces:
   1. A brand-new agent name doesn't exist yet.
   2. One trace under that name -> it exists.
   3. A second trace under the *same* name -> still one agent, not a duplicate.
   4. A trace under a *different* new name -> now there are two.
-
-GET /agent-monitoring/agents is dashboard-only (no dedicated SDK method for it, same as a few
-other things this folder's README calls out), so this uses `requests` directly for that one call,
-the exact endpoint Overview's agent table calls.
 """
 
 import os
